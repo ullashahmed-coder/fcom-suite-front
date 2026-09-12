@@ -4,85 +4,325 @@ import React, { useState, useEffect } from "react";
 import { 
   Search, Users, Briefcase, DollarSign, 
   Wallet, Calendar, CheckCircle2, 
-  CreditCard, FileText, Phone, Loader2, Info
+  CreditCard, FileText, Phone, Loader2, Info,
+  Package, Truck, RotateCcw, X, Landmark, Receipt, CalendarDays, Clock, Layers
 } from "lucide-react";
 
 export default function StaffPayrollPage() {
   const [activeTab, setActiveTab] = useState<"directory" | "history">("directory");
+  
+  const [rawUsers, setRawUsers] = useState<any[]>([]);
+  const [rawOrders, setRawOrders] = useState<any[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<any[]>([]);
+  
   const [staffList, setStaffList] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const getLocalMonthStr = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [dateFilter, setDateFilter] = useState<string>(getLocalMonthStr()); 
+  const quickFilters = ["Today", "Yesterday", "Last 7 Days"];
+
+  // Individual Payment Modal
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    bonus: "",
+    deduction: "",
+    method: "Cash Handover"
+  });
+
+  // 🚀 Bulk Payment Modal States
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkPaymentMethod, setBulkPaymentMethod] = useState("Cash Handover");
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-  // ডামি পেমেন্ট হিস্ট্রি (যেহেতু এর ব্যাকএন্ড এখনো তৈরি হয়নি)
-  const payrollHistory = [
-    { id: "PAY-1045", date: "01 Aug 2026", empName: "Mitu", amount: 15000, bonus: 2000, total: 17000, method: "bKash", status: "Paid" },
-    { id: "PAY-1044", date: "01 Aug 2026", empName: "Mim", amount: 15000, bonus: 1500, total: 16500, method: "Bank Transfer", status: "Paid" },
-    { id: "PAY-1043", date: "01 Jul 2026", empName: "Eti", amount: 12000, bonus: 0, total: 12000, method: "Cash", status: "Paid" },
-  ];
-
-  // 🚀 ডাটাবেস থেকে স্টাফ/ইউজার ফেচ করা
-  const fetchStaff = async () => {
+  const fetchStaffAndOrders = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/users`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        
-        // UI এর জন্য ডেটা ফরম্যাট করা (Salary ডাইনামিক করা হচ্ছে Role এর ওপর ভিত্তি করে)
-        const formattedStaff = data.map((user: any) => ({
-          ...user,
-          salary: user.role.includes("ADMIN") ? 50000 : user.role === "OPERATOR" ? 15000 : 12000,
-          pendingPay: user.status === "Active" ? (user.role === "OPERATOR" ? 15000 : 12000) : 0,
-          joinDate: new Date(user.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          avatarBg: user.role.includes("ADMIN") ? "bg-purple-600" : user.role === "OPERATOR" ? "bg-cyan-600" : "bg-emerald-600"
-        }));
+      const headers = { "Authorization": `Bearer ${token}` };
 
-        setStaffList(formattedStaff);
-        if (formattedStaff.length > 0 && !selectedStaff) {
-          setSelectedStaff(formattedStaff[0]);
-        }
+      const [usersRes, ordersRes, payrollRes] = await Promise.all([
+        fetch(`${apiUrl}/users`, { headers }),
+        fetch(`${apiUrl}/orders`, { headers }),
+        fetch(`${apiUrl}/users/payroll/history`, { headers }) 
+      ]);
+      
+      if (usersRes.ok && ordersRes.ok && payrollRes.ok) {
+        setRawUsers(await usersRes.json());
+        setRawOrders(await ordersRes.json());
+        setPayrollHistory(await payrollRes.json());
       }
     } catch (error) {
-      console.error("Failed to fetch staff:", error);
+      console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStaff();
+    fetchStaffAndOrders();
   }, []);
 
-  // 🚀 ডাইনামিক সার্চ ফিল্টার
+  useEffect(() => {
+    if (rawUsers.length === 0) return;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const startOf7DaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+
+    const isMonthFilter = /^\d{4}-\d{2}$/.test(dateFilter);
+
+    const formattedStaff = rawUsers.map((user: any) => {
+      let filterStartDate: Date;
+      let filterEndDate: Date;
+
+      if (dateFilter === "Today") {
+        filterStartDate = startOfToday;
+        filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+      } else if (dateFilter === "Yesterday") {
+        filterStartDate = startOfYesterday;
+        filterEndDate = new Date(startOfToday.getTime() - 1);
+      } else if (dateFilter === "Last 7 Days") {
+        filterStartDate = startOf7DaysAgo;
+        filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+      } else if (isMonthFilter) {
+        const [year, month] = dateFilter.split("-").map(Number);
+        filterStartDate = new Date(year, month - 1, 1);
+        filterEndDate = new Date(year, month, 0, 23, 59, 59, 999);
+      } else {
+        filterStartDate = new Date(0); 
+        filterEndDate = new Date();
+      }
+
+      const userOrders = rawOrders.filter((o: any) => {
+        if (o.isDeleted) return false;
+        if (o.userId !== user.id && o.user?.id !== user.id) return false;
+        const orderDate = new Date(o.createdAt || o.updatedAt);
+        return orderDate >= filterStartDate && orderDate <= filterEndDate;
+      });
+      
+      const createdCount = userOrders.length;
+      
+      const deliveredOrders = userOrders.filter((o: any) => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(o.status?.toUpperCase()));
+      const deliveredParcels = deliveredOrders.length;
+      
+      const deliveredItemsCount = deliveredOrders.reduce((sum: number, o: any) => {
+        return sum + (o.items?.reduce((s: number, item: any) => {
+          const returned = item.returnedQty || 0; 
+          const kept = item.quantity - returned;  
+          return s + (kept > 0 ? kept : 0);
+        }, 0) || 0);
+      }, 0);
+      
+      const returnedCount = userOrders.filter((o: any) => ['RETURNED', 'CANCELLED'].includes(o.status?.toUpperCase())).length;
+
+      let calculatedBasicSalary = 0;
+      let salaryNote = "";
+      const fullBasicSalary = user.basicSalary || 0;
+      const joinDate = new Date(user.createdAt);
+
+      if (isMonthFilter) {
+        const joinYearMonth = `${joinDate.getFullYear()}-${String(joinDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (joinYearMonth === dateFilter) {
+          const daysInMonth = filterEndDate.getDate();
+          const daysWorked = daysInMonth - joinDate.getDate() + 1;
+          calculatedBasicSalary = Math.round((fullBasicSalary / daysInMonth) * daysWorked);
+          salaryNote = `(Pro-rated for ${daysWorked} days)`;
+        } else if (joinDate < filterStartDate) {
+          calculatedBasicSalary = fullBasicSalary;
+        } else {
+          calculatedBasicSalary = 0;
+          salaryNote = "(Joined after this month)";
+        }
+      } else {
+        calculatedBasicSalary = 0;
+        salaryNote = "(Basic salary applies to full months only)";
+      }
+
+      const commissionRate = user.commission || 0;
+      const commissionAmount = commissionRate * deliveredItemsCount; 
+      
+      const netPayable = calculatedBasicSalary + commissionAmount;
+
+      return {
+        ...user,
+        calculatedBasicSalary,
+        fullBasicSalary,
+        salaryNote,
+        commissionRate,
+        createdCount,
+        deliveredParcels,
+        deliveredItemsCount,
+        returnedCount,
+        commissionAmount,
+        netPayable,
+        pendingPay: user.status === "Active" ? netPayable : 0,
+        joinDate: joinDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        avatarBg: user.role.includes("ADMIN") || user.role === "SHOP_OWNER" ? "bg-purple-600" : user.role === "OPERATOR" ? "bg-cyan-600" : "bg-emerald-600"
+      };
+    });
+
+    setStaffList(formattedStaff);
+    
+    if (selectedStaff) {
+      const updatedSelected = formattedStaff.find((s: any) => s.id === selectedStaff.id);
+      if (updatedSelected) setSelectedStaff(updatedSelected);
+    } else if (formattedStaff.length > 0) {
+      setSelectedStaff(formattedStaff[0]);
+    }
+
+  }, [rawUsers, rawOrders, dateFilter]); 
+
   const filteredStaff = staffList.filter(staff => 
     staff.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
     staff.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     staff.phone?.includes(searchQuery)
   );
 
-  // 🚀 ডাইনামিক KPI ক্যালকুলেশন
+  const filteredHistory = payrollHistory.filter(h => 
+    h.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    h.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const totalStaff = staffList.length;
   const activeStaff = staffList.filter(s => s.status !== "Inactive").length;
-  const totalPayroll = staffList.reduce((acc, curr) => acc + curr.salary, 0);
+  const totalPayroll = staffList.reduce((acc, curr) => acc + curr.netPayable, 0);
   const totalPending = staffList.reduce((acc, curr) => acc + curr.pendingPay, 0);
+
+  const finalPaymentAmount = selectedStaff 
+    ? selectedStaff.netPayable + (Number(paymentForm.bonus) || 0) - (Number(paymentForm.deduction) || 0) 
+    : 0;
+
+  // 🚀 Individual Payment processing
+  const handleProcessPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff) return;
+    setIsProcessing(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const payload = {
+        userId: selectedStaff.id,
+        monthYear: dateFilter,
+        basicSalary: selectedStaff.calculatedBasicSalary,
+        commission: selectedStaff.commissionAmount,
+        bonus: Number(paymentForm.bonus) || 0,
+        deduction: Number(paymentForm.deduction) || 0,
+        totalAmount: finalPaymentAmount,
+        paymentMethod: paymentForm.method
+      };
+      const res = await fetch(`${apiUrl}/users/payroll`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ ${selectedStaff.name}-এর পেমেন্ট সফলভাবে সেভ হয়েছে!`);
+        setIsPaymentModalOpen(false);
+        setPaymentForm({ bonus: "", deduction: "", method: "Cash Handover" });
+        fetchStaffAndOrders(); 
+        setActiveTab("history"); 
+      } else {
+        alert(`❌ পেমেন্ট ব্যর্থ হয়েছে: ${data.message}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("সার্ভার এরর!");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 🚀 Bulk Payment Processing
+  const handleBulkPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBulkProcessing(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      let successCount = 0;
+      let failCount = 0;
+
+      // সবার জন্য একসাথে API কল পাঠানো হচ্ছে (Promise.all দিয়ে)
+      await Promise.all(
+        eligibleBulkStaff.map(async (staff) => {
+          try {
+            const payload = {
+              userId: staff.id,
+              monthYear: dateFilter,
+              basicSalary: staff.calculatedBasicSalary,
+              commission: staff.commissionAmount,
+              bonus: 0, 
+              deduction: 0,
+              totalAmount: staff.netPayable,
+              paymentMethod: bulkPaymentMethod
+            };
+            const res = await fetch(`${apiUrl}/users/payroll`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) successCount++;
+            else failCount++;
+          } catch (err) {
+            failCount++;
+          }
+        })
+      );
+
+      alert(`✅ বুল্ক পেমেন্ট সম্পন্ন!\nসফল: ${successCount} জন\nব্যর্থ: ${failCount} জন`);
+      setIsBulkModalOpen(false);
+      fetchStaffAndOrders();
+      setActiveTab("history");
+    } catch (error) {
+      alert("সার্ভার এরর! বুল্ক পেমেন্ট সম্পন্ন করা যায়নি।");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const getDisplayFilterName = (val: string) => {
+    if (/^\d{4}-\d{2}$/.test(val)) {
+      const [year, month] = val.split('-');
+      const date = new Date(Number(year), Number(month) - 1);
+      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    }
+    return val;
+  };
+
+  const isMonthFormat = /^\d{4}-\d{2}$/.test(dateFilter);
+  const currentMonthStr = getLocalMonthStr();
+  const isCurrentOrFutureMonth = isMonthFormat && dateFilter >= currentMonthStr;
+  
+  const isAlreadyPaid = isMonthFormat && payrollHistory.some(p => p.userId === selectedStaff?.id && p.monthYear === dateFilter);
+
+  // 🚀 Bulk Payment Eligibility Logic
+  const eligibleBulkStaff = staffList.filter(s => 
+    s.netPayable > 0 && 
+    !payrollHistory.some(p => p.userId === s.id && p.monthYear === dateFilter)
+  );
+  const bulkTotalAmount = eligibleBulkStaff.reduce((sum, s) => sum + s.netPayable, 0);
 
   if (isLoading) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] gap-3">
         <Loader2 className="animate-spin text-indigo-500" size={40} />
-        <p className="text-slate-500 font-medium">লোডিং পেরোল ডেটা...</p>
+        <p className="text-slate-500 font-medium">লোডিং পেরোল ও সেলস ডেটা...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-6 font-sans transition-colors duration-300">
+    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-6 font-sans transition-colors duration-300 relative">
       
       {/* ================= HEADER ================= */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -90,12 +330,29 @@ export default function StaffPayrollPage() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <Wallet className="text-indigo-500" size={24} /> Staff Payroll
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage salaries, process payments, and view payroll history.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage salaries, commissions, and process payments.</p>
         </div>
         
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
-            <Wallet size={16} /> Process Bulk Pay
+          {/* 🚀 Dynamic Bulk Payment Button */}
+          <button 
+            onClick={() => setIsBulkModalOpen(true)}
+            disabled={!isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-colors ${
+              !isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0
+              ? "bg-gray-200 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-none"
+              : "bg-indigo-600 hover:bg-indigo-700 text-white"
+            }`}
+          >
+            <Layers size={16} /> 
+            {!isMonthFormat 
+              ? "Process Bulk Pay" 
+              : isCurrentOrFutureMonth 
+                ? "Month Not Ended" 
+                : eligibleBulkStaff.length === 0 
+                  ? "All Paid" 
+                  : `Pay ${eligibleBulkStaff.length} Staff`
+            }
           </button>
         </div>
       </div>
@@ -104,8 +361,8 @@ export default function StaffPayrollPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
         {[
           { label: "Total Staff", value: totalStaff, icon: <Briefcase size={20} />, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
-          { label: "Active This Month", value: activeStaff, icon: <CheckCircle2 size={20} />, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
-          { label: "Monthly Payroll", value: `৳ ${totalPayroll.toLocaleString()}`, icon: <DollarSign size={20} />, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
+          { label: "Active Staff", value: activeStaff, icon: <CheckCircle2 size={20} />, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+          { label: "Calculated Payroll", value: `৳ ${totalPayroll.toLocaleString()}`, icon: <DollarSign size={20} />, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
           { label: "Pending Payments", value: `৳ ${totalPending.toLocaleString()}`, icon: <CreditCard size={20} />, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
         ].map((kpi, idx) => (
           <div key={idx} className="bg-white dark:bg-[#1a2421] p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex items-center justify-between">
@@ -121,14 +378,12 @@ export default function StaffPayrollPage() {
       </div>
 
       {/* ================= MAIN CONTENT GRID ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[70vh]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
         
         {/* ================= LEFT COLUMN ================= */}
         <div className="lg:col-span-7 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col overflow-hidden transition-colors">
           
           <div className="p-5 shrink-0 space-y-4">
-            
-            {/* Tab Toggle */}
             <div className="flex justify-between items-center">
               <div className="inline-flex bg-gray-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm">
                 <button 
@@ -149,12 +404,45 @@ export default function StaffPayrollPage() {
                 </button>
               </div>
               
-              <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10">
-                <Info size={14} /> To add new staff, visit Users page.
-              </div>
+              {activeTab === "directory" && (
+                <div className="flex bg-slate-50 dark:bg-[#141d1a] p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm items-center overflow-x-auto custom-scrollbar">
+                  <div className="pl-2 pr-1 text-gray-400">
+                    <CalendarDays size={14} />
+                  </div>
+                  
+                  {quickFilters.map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setDateFilter(filter)}
+                      className={`px-3 py-1.5 text-[11px] rounded-md transition-all duration-200 whitespace-nowrap font-bold ${
+                        dateFilter === filter 
+                          ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-white/10" 
+                          : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-300 hover:bg-white/50 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+
+                  <div className="w-px h-4 bg-gray-300 dark:bg-white/20 mx-1.5"></div>
+
+                  <input 
+                    type="month" 
+                    value={isMonthFormat ? dateFilter : ""}
+                    onChange={(e) => {
+                      if(e.target.value) setDateFilter(e.target.value);
+                    }}
+                    title="Select any Month"
+                    className={`px-2 py-1 mx-1 text-[11px] font-bold rounded-md outline-none transition-colors cursor-pointer border ${
+                      isMonthFormat 
+                        ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 shadow-sm border-gray-200 dark:border-white/10" 
+                        : "bg-transparent text-slate-500 dark:text-gray-400 border-transparent hover:text-slate-700 dark:hover:text-gray-300 hover:bg-white/50 dark:hover:bg-white/5"
+                    }`}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Search */}
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
               <input 
@@ -167,42 +455,57 @@ export default function StaffPayrollPage() {
             </div>
           </div>
 
-          {/* List Scrollable Area */}
           <div className="flex-1 overflow-y-auto p-5 pt-0 space-y-3 custom-scrollbar">
             {activeTab === "directory" 
               ? filteredStaff.length === 0 ? (
-                  <div className="text-center py-10 text-gray-400 text-sm">No staff found.</div>
+                  <div className="text-center py-10 text-gray-400 text-sm">No staff found for this period.</div>
                 ) : filteredStaff.map((staff) => {
                   const isSelected = selectedStaff?.id === staff.id;
                   return (
                     <div 
                       key={staff.id} 
                       onClick={() => setSelectedStaff(staff)}
-                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                      className={`flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all ${
                         isSelected ? "border-indigo-500 dark:border-indigo-500/60 bg-indigo-50/50 dark:bg-indigo-500/10 shadow-sm" : "border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] hover:border-gray-200 dark:hover:border-white/10"
                       }`}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full ${staff.avatarBg} text-white flex items-center justify-center text-lg font-bold shadow-sm`}>
-                          {staff.name?.charAt(0).toUpperCase()}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full ${staff.avatarBg} text-white flex items-center justify-center text-lg font-bold shadow-sm`}>
+                            {staff.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className={`text-[15px] font-bold ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-white'}`}>{staff.name}</h3>
+                            <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">{staff.role}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className={`text-[15px] font-bold ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-white'}`}>{staff.name}</h3>
-                          <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">{staff.role}</p>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[15px] font-black text-indigo-600 dark:text-indigo-400">৳ {staff.netPayable.toLocaleString()}</span>
+                          <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                            staff.status !== 'Inactive' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                          }`}>
+                            {staff.status || 'Active'}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-[13px] font-bold text-slate-700 dark:text-gray-200">৳ {staff.salary.toLocaleString()}</span>
-                        <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          staff.status !== 'Inactive' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                        }`}>
-                          {staff.status || 'Active'}
+
+                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/10 flex justify-between text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                        <span>Created: <b className="text-slate-700 dark:text-gray-200">{staff.createdCount}</b></span>
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-emerald-500" />
+                          Delivered: <b className="text-emerald-600 dark:text-emerald-400">{staff.deliveredParcels}</b> ({staff.deliveredItemsCount} Itm)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <RotateCcw size={12} className="text-rose-500" />
+                          Returned: <b className="text-rose-600 dark:text-rose-400">{staff.returnedCount}</b>
                         </span>
                       </div>
                     </div>
                   );
                 })
-              : payrollHistory.map((history, idx) => (
+              : filteredHistory.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-sm">No payment history found.</div>
+                ) : filteredHistory.map((history, idx) => (
                   <div 
                     key={idx} 
                     className="flex items-center justify-between p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] hover:border-gray-200 dark:hover:border-white/10 transition-all"
@@ -213,15 +516,19 @@ export default function StaffPayrollPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">{history.id}</h3>
-                          <span className="text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-gray-300 px-2 py-0.5 rounded uppercase">{history.method}</span>
+                          <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">
+                            {history.id.length > 10 ? `PAY-${history.id.substring(0,6).toUpperCase()}` : history.id}
+                          </h3>
+                          <span className="text-[10px] font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-gray-300 px-2 py-0.5 rounded uppercase">{history.paymentMethod || history.method}</span>
                         </div>
-                        <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">Paid to <span className="font-bold text-slate-700 dark:text-gray-300">{history.empName}</span> on {history.date}</p>
+                        <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">Paid to <span className="font-bold text-slate-700 dark:text-gray-300">{history.user?.name || history.empName}</span> on {new Date(history.createdAt || history.date).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <h4 className="text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400">৳ {history.total.toLocaleString()}</h4>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Including Bonus: ৳{history.bonus}</p>
+                    <div className="text-right flex flex-col items-end">
+                      <h4 className="text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400">৳ {(history.totalAmount || history.total).toLocaleString()}</h4>
+                      <span className="text-[9px] font-bold px-2 py-0.5 mt-1 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 rounded">
+                        For: {getDisplayFilterName(history.monthYear)}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -251,44 +558,85 @@ export default function StaffPayrollPage() {
             
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
               
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-4 border border-gray-100 dark:border-white/5">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Phone size={12}/> Phone</p>
-                  <p className="text-[13px] font-bold text-slate-700 dark:text-gray-200">{selectedStaff.phone || "Not provided"}</p>
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Order Performance</h3>
+                  <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/20">
+                    {getDisplayFilterName(dateFilter)}
+                  </span>
                 </div>
-                <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-4 border border-gray-100 dark:border-white/5">
-                  <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Calendar size={12}/> Joined Date</p>
-                  <p className="text-[13px] font-bold text-slate-700 dark:text-gray-200">{selectedStaff.joinDate}</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-3 border border-gray-100 dark:border-white/5 text-center flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 flex items-center gap-1"><Package size={10}/> Created</p>
+                    <p className="text-xl font-black text-slate-700 dark:text-gray-200">{selectedStaff.createdCount}</p>
+                    <p className="text-[9px] text-gray-500">Parcels</p>
+                  </div>
+                  
+                  <div className="bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl p-3 border border-emerald-100 dark:border-emerald-500/20 text-center flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1 flex items-center gap-1"><Truck size={10}/> Delivered</p>
+                    <p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{selectedStaff.deliveredParcels}</p>
+                    <p className="text-[9px] text-emerald-600 dark:text-emerald-500 font-medium">({selectedStaff.deliveredItemsCount} Sarees)</p>
+                  </div>
+
+                  <div className="bg-rose-50/50 dark:bg-rose-500/10 rounded-xl p-3 border border-rose-100 dark:border-rose-500/20 text-center flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase mb-1 flex items-center gap-1"><RotateCcw size={10}/> Returned</p>
+                    <p className="text-xl font-black text-rose-700 dark:text-rose-400">{selectedStaff.returnedCount}</p>
+                    <p className="text-[9px] text-rose-600 dark:text-rose-500 font-medium">Parcels</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Salary Breakdown */}
               <div>
-                <h3 className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Salary Information</h3>
+                <h3 className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Salary & Commissions</h3>
                 <div className="border border-gray-200 dark:border-white/10 rounded-xl p-5 space-y-4">
                   <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-white/10">
-                    <span className="text-[13px] text-gray-500 dark:text-gray-400">Basic Salary (Monthly)</span>
-                    <span className="font-bold text-slate-800 dark:text-white">৳ {selectedStaff.salary.toLocaleString()}</span>
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">Basic Salary</span>
+                      {selectedStaff.salaryNote && <span className="text-[10px] text-amber-500 dark:text-amber-400 font-medium mt-0.5">{selectedStaff.salaryNote}</span>}
+                    </div>
+                    <span className="font-bold text-slate-800 dark:text-white">৳ {selectedStaff.calculatedBasicSalary.toLocaleString()}</span>
                   </div>
+                  
                   <div className="flex justify-between items-center pb-3 border-b border-gray-100 dark:border-white/10">
-                    <span className="text-[13px] text-gray-500 dark:text-gray-400">Sales Bonus / Incentives</span>
-                    <span className="font-bold text-indigo-500 dark:text-indigo-400">+ ৳ 0</span>
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">Commission Earned</span>
+                      <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5">
+                        (৳{selectedStaff.commissionRate}/saree × {selectedStaff.deliveredItemsCount} delivered)
+                      </span>
+                    </div>
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400">+ ৳ {selectedStaff.commissionAmount.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-[14px] font-bold text-slate-800 dark:text-white">Net Payable Amount</span>
-                    <span className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">৳ {selectedStaff.salary.toLocaleString()}</span>
+                  
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-[14px] font-black text-slate-800 dark:text-white">Net Payable Amount</span>
+                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">৳ {selectedStaff.netPayable.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
             </div>
 
-            {/* Bottom Action Button */}
             <div className="p-5 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a2421] transition-colors">
-              <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-md transition-colors flex justify-center items-center gap-2">
-                <Wallet size={18} /> Process Payment
-              </button>
+              {!isMonthFormat ? (
+                <button disabled className="w-full bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500 py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed">
+                  <CalendarDays size={18} /> Select a specific month to pay
+                </button>
+              ) : isCurrentOrFutureMonth ? (
+                <button disabled className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-500 py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed shadow-sm">
+                  <Clock size={18} /> Month Not Completed Yet
+                </button>
+              ) : isAlreadyPaid ? (
+                <button disabled className="w-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-500 py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed shadow-sm">
+                  <CheckCircle2 size={18} /> Already Paid for {getDisplayFilterName(dateFilter)}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-md transition-colors flex justify-center items-center gap-2"
+                >
+                  <Wallet size={18} /> Process Payment for {getDisplayFilterName(dateFilter)}
+                </button>
+              )}
             </div>
 
           </div>
@@ -306,8 +654,162 @@ export default function StaffPayrollPage() {
               </p>
            </div>
         )}
-
       </div>
+
+      {/* ================= 🚀 INDIVIDUAL PAYMENT MODAL ================= */}
+      {isPaymentModalOpen && selectedStaff && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Landmark size={20} className="text-indigo-500"/> Process Payment for {getDisplayFilterName(dateFilter)}
+              </h2>
+              <button onClick={() => setIsPaymentModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors">
+                <X size={20}/>
+              </button>
+            </div>
+            
+            <form onSubmit={handleProcessPayment} className="p-6 space-y-6">
+              
+              <div className="flex items-center gap-4 bg-indigo-50 dark:bg-indigo-500/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                <div className={`w-12 h-12 rounded-full ${selectedStaff.avatarBg} text-white flex items-center justify-center text-lg font-bold shadow-sm`}>
+                  {selectedStaff.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-slate-800 dark:text-white">{selectedStaff.name}</h3>
+                  <p className="text-[12px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 uppercase tracking-wider">{selectedStaff.role}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Add Bonus (৳)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    placeholder="e.g. 1000" 
+                    value={paymentForm.bonus}
+                    onChange={(e) => setPaymentForm({...paymentForm, bonus: e.target.value})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-emerald-600 dark:text-emerald-400 font-bold placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Deduction (৳)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    placeholder="e.g. 500" 
+                    value={paymentForm.deduction}
+                    onChange={(e) => setPaymentForm({...paymentForm, deduction: e.target.value})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-rose-600 dark:text-rose-400 font-bold placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Payment Method *</label>
+                <select 
+                  required
+                  value={paymentForm.method}
+                  onChange={(e) => setPaymentForm({...paymentForm, method: e.target.value})}
+                  className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 appearance-none transition-colors"
+                >
+                  <option value="Cash Handover">Cash Handover</option>
+                  <option value="bKash">bKash</option>
+                  <option value="Nagad">Nagad</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#141d1a] p-4 rounded-xl border border-gray-200 dark:border-white/10 text-center">
+                <p className="text-[12px] font-bold text-slate-500 dark:text-gray-400 mb-1 uppercase tracking-widest">Total Amount to Pay</p>
+                <h2 className="text-3xl font-black text-indigo-600 dark:text-indigo-400">৳ {finalPaymentAmount.toLocaleString()}</h2>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  (Base Pay: ৳{selectedStaff.calculatedBasicSalary} {Number(paymentForm.bonus) > 0 ? `+ Bonus: ৳${paymentForm.bonus}` : ""} {Number(paymentForm.deduction) > 0 ? `- Ded: ৳${paymentForm.deduction}` : ""})
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-gray-200 font-bold py-3 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isProcessing} 
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-2 disabled:opacity-70"
+                >
+                  {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Receipt size={18} />} 
+                  {isProcessing ? "Processing..." : "Confirm & Pay"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 🚀 BULK PAYMENT MODAL ================= */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Layers size={20} className="text-indigo-500"/> Process Bulk Payment
+              </h2>
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors">
+                <X size={20}/>
+              </button>
+            </div>
+            
+            <form onSubmit={handleBulkPayment} className="p-6 space-y-6">
+              
+              <div className="text-center space-y-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400">You are about to process salary for <strong className="text-slate-800 dark:text-white">{eligibleBulkStaff.length} employees</strong> for the month of <strong className="text-indigo-600 dark:text-indigo-400">{getDisplayFilterName(dateFilter)}</strong>.</p>
+                <h2 className="text-4xl font-black text-indigo-600 dark:text-indigo-400 py-3">৳ {bulkTotalAmount.toLocaleString()}</h2>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Default Payment Method *</label>
+                <select 
+                  required
+                  value={bulkPaymentMethod}
+                  onChange={(e) => setBulkPaymentMethod(e.target.value)}
+                  className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 appearance-none transition-colors"
+                >
+                  <option value="Cash Handover">Cash Handover</option>
+                  <option value="bKash">bKash</option>
+                  <option value="Nagad">Nagad</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">This method will be applied to all {eligibleBulkStaff.length} transactions.</p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsBulkModalOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-gray-200 font-bold py-3 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isBulkProcessing} 
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-2 disabled:opacity-70"
+                >
+                  {isBulkProcessing ? <Loader2 size={18} className="animate-spin" /> : <Receipt size={18} />} 
+                  {isBulkProcessing ? "Processing..." : "Confirm Bulk Pay"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -20,12 +20,13 @@ export default function MixedPackingDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [toPackOrders, setToPackOrders] = useState<any[]>([])
   const [allPackedOrders, setAllPackedOrders] = useState<any[]>([])
-  
+  const [returnedOrders, setReturnedOrders] = useState<any[]>([])
+
   // User Role State
   const [userRole, setUserRole] = useState<string>("")
   
-  // Filter State
-  const [dateFilter, setDateFilter] = useState<'today' | 'last7days' | 'last30days' | 'all' | 'custom'>('today')
+  // 🚀 ফিক্স: dateFilter স্টেটে 'yesterday' অ্যাড করা হলো
+  const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'all' | 'custom'>('today')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
 
@@ -33,7 +34,7 @@ export default function MixedPackingDashboard() {
   const [packedSearchQuery, setPackedSearchQuery] = useState("")
 
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
-  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null) // 🚀 বুকিং লোডিং স্টেট
+  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPackingOrders()
@@ -50,29 +51,20 @@ export default function MixedPackingDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        const activeOrders = data.filter((o: any) => !o.isDeleted);
-        setOrders(activeOrders);
-
-        // 🚀 ১. যে অর্ডারগুলো প্যাকিংয়ের জন্য কিউতে থাকবে (PENDING, IN_REVIEW বা বুকিং হওয়া পার্সেল)
-        const inReview = activeOrders.filter((o: any) => 
-          ['IN_REVIEW', 'PENDING', 'COURIER_PENDING', 'BOOKED'].includes(o.status?.toUpperCase())
-        )
-        setToPackOrders(inReview)
-        if (inReview.length > 0 && !selectedOrder) setSelectedOrder(inReview[0])
-
-        // 🚀 ২. শুধুমাত্র প্যাকার যখন 'Pack Complete' করবে (স্ট্যাটাস 'PACKED'), কেবল তখনই হিস্টরিতে যাবে
-        const postPackStatuses = [
-          'PACKED', 
-          'SHIPPED', 
-          'DELIVERED', 
-          'PARTIAL DELIVERED', 
-          'PARTIAL_DELIVERED'
-        ];
         
-        const packedHistory = activeOrders.filter((o: any) => 
-          postPackStatuses.includes(o.status?.toUpperCase())
-        )
+        const validOrders = data.filter((o: any) => !o.isDeleted);
+        setOrders(validOrders)
+
+        const inReview = validOrders.filter((o: any) => ['IN_REVIEW', 'in review', 'In Review', 'BOOKED', 'Booked', 'booked'].includes(o.status))
+        setToPackOrders(inReview)
+        if (inReview.length > 0) setSelectedOrder(inReview[0])
+
+        const postPackStatuses = ['PACKED', 'COURIER_PENDING', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'APPROVAL PENDING', 'APPROVAL_PENDING'];
+        const packedHistory = validOrders.filter((o: any) => postPackStatuses.includes(o.status?.toUpperCase()))
         setAllPackedOrders(packedHistory.reverse())
+
+        const returns = validOrders.filter((o: any) => ['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(o.status?.toUpperCase()))
+        setReturnedOrders(returns.reverse())
       }
     } catch (error) {
       console.error("Error fetching orders:", error)
@@ -139,6 +131,11 @@ export default function MixedPackingDashboard() {
 
       if (dateFilter === 'today') {
         passesDate = orderDate.toDateString() === today.toDateString();
+      } else if (dateFilter === 'yesterday') {
+        // 🚀 ফিক্স: 'yesterday' এর লজিক অ্যাড করা হলো
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        passesDate = orderDate.toDateString() === yesterday.toDateString();
       } else if (dateFilter === 'last7days') {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(today.getDate() - 7);
@@ -219,38 +216,6 @@ export default function MixedPackingDashboard() {
     }
   }
 
-  // 🚀 Steadfast Courier Booking Function added directly to Packing Dashboard
-  const handleBookCourier = async (orderId: string) => {
-    if (!window.confirm("আপনি কি এই পার্সেলটি Steadfast-এ বুক করতে চান?")) return;
-    
-    setBookingOrderId(orderId);
-    try {
-      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/orders/${orderId}/book-steadfast`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        alert(`✅ সফলভাবে বুকিং হয়েছে! ট্র্যাকিং কোড: ${data.consignment.tracking_code}`);
-        
-        // সফল বুকিংয়ের পর ডেটা রিফেচ করে সরাসরি Packed History ট্যাবে শিফট করা
-        await fetchPackingOrders();
-        setSelectedOrder(null);
-        setActiveTab('history'); // 🚀 বুকিং সম্পন্ন হওয়ার সাথে সাথে হিস্ট্রি ট্যাবে চলে যাবে
-      } else {
-        alert(`❌ বুকিং ব্যর্থ হয়েছে: ${data.message || "Unknown error"}`);
-      }
-    } catch (error) {
-      console.error("Booking error:", error);
-      alert("সার্ভার এরর! বুকিং করা যায়নি।");
-    } finally {
-      setBookingOrderId(null);
-    }
-  };
-
   const handleUnpack = async () => {
     if (!selectedPackedOrder) return;
     if (!window.confirm("আপনি কি নিশ্চিত যে এই পার্সেলটি আনপ্যাক করে আবার 'To Pack' লিস্টে পাঠাতে চান?")) return;
@@ -283,7 +248,8 @@ export default function MixedPackingDashboard() {
   const getDynamicStatusBadge = (status: string) => {
     const s = status?.toUpperCase() || "";
     if (s === 'PACKED' || s === 'PROCESSING' || s === 'BOOKED') return <span className="text-[10px] bg-green-100 dark:bg-emerald-500/10 text-green-700 dark:text-emerald-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><CheckCircle2 size={12} /> {s}</span>;
-    if (s === 'PENDING' || s === 'COURIER_PENDING') return <span className="text-[10px] bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><Truck size={12} /> Courier</span>;
+    if (s === 'COURIER_PENDING') return <span className="text-[10px] bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><Truck size={12} /> Courier Pending</span>;
+    if (s === 'PENDING') return <span className="text-[10px] bg-teal-100 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><Clock size={12} /> New Order</span>;
     if (s === 'DELIVERED') return <span className="text-[10px] bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><CheckCircle2 size={12} /> Delivered</span>;
     if (s === 'PARTIAL_DELIVERED' || s === 'PARTIAL DELIVERED') return <span className="text-[10px] bg-teal-100 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><Package size={12} /> Partial</span>;
     if (s.includes('CANCEL') || s.includes('RETURN')) {
@@ -415,7 +381,7 @@ export default function MixedPackingDashboard() {
                       <div className="flex-1 flex justify-between items-center gap-3 overflow-hidden">
                         <div className="flex-1 min-w-0">
                           <p className={`font-black text-sm tracking-wide truncate ${isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-gray-200'}`}>
-                            {order.orderNo || order.consignmentId || order.trackingCode || `ORD-${order.id}`}
+                            {order.consignmentId || order.trackingCode || order.orderNo || `ORD-${order.id}`}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 truncate">{order.customer?.name} • {order.customer?.district}</p>
                         </div>
@@ -450,11 +416,10 @@ export default function MixedPackingDashboard() {
             ) : (
               <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col h-[700px] overflow-hidden transition-colors">
                 
-                {/* 🚀 উপরে বড় করে Steadfast Parcel ID / CN নম্বর */}
                 <div className="bg-slate-50 dark:bg-[#141d1a] p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
                   <p className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1">Steadfast Parcel ID</p>
                   <p className="text-2xl font-black text-blue-700 dark:text-blue-400 tracking-wider font-mono">
-                    {selectedOrder.consignmentId || selectedOrder.orderNo || `ORD-${selectedOrder.id}`}
+                    {selectedOrder.consignmentId || selectedOrder.trackingCode || selectedOrder.orderNo || `ORD-${selectedOrder.id}`}
                   </p>
                 </div>
 
@@ -508,7 +473,6 @@ export default function MixedPackingDashboard() {
                   </div>
                 </div>
 
-                {/* 🚀 নিচে পাশাপাশি এডিট এবং প্যাক কমপ্লিট বাটন */}
                 <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-slate-50 dark:bg-[#141d1a] flex gap-3 shrink-0">
                   <button 
                     onClick={() => router.push(`/dashboard/orders/${selectedOrder.id}/edit`)}
@@ -552,7 +516,8 @@ export default function MixedPackingDashboard() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center bg-slate-100 dark:bg-[#141d1a] p-1 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner">
-                  {(['today', 'last7days', 'last30days', 'all'] as const).map((filter) => (
+                  {/* 🚀 ফিক্স: 'yesterday' অপশনটি UI তে অ্যাড করা হলো */}
+                  {(['today', 'yesterday', 'last7days', 'last30days', 'all'] as const).map((filter) => (
                     <button
                       key={filter}
                       onClick={() => {
@@ -567,6 +532,7 @@ export default function MixedPackingDashboard() {
                       }`}
                     >
                       {filter === 'today' && 'Today'}
+                      {filter === 'yesterday' && 'Yesterday'}
                       {filter === 'last7days' && 'Last 7 Days'}
                       {filter === 'last30days' && 'Last 30 Days'}
                       {filter === 'all' && 'All Time'}
@@ -621,7 +587,7 @@ export default function MixedPackingDashboard() {
                       <div className="flex-1 flex justify-between items-center gap-3 overflow-hidden">
                         <div className="flex-1 min-w-0">
                           <p className={`font-black text-sm tracking-wide truncate ${isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-gray-200'}`}>
-                            {order.orderNo || order.consignmentId || order.trackingCode || `ORD-${order.id}`}
+                            {order.consignmentId || order.trackingCode || order.orderNo || `ORD-${order.id}`}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 truncate">{order.customer?.name} • {order.customer?.district}</p>
                         </div>
@@ -656,14 +622,13 @@ export default function MixedPackingDashboard() {
             ) : (
               <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col h-[700px] overflow-hidden relative transition-colors">
                 
-                {/* 🚀 উপরে বড় করে Steadfast Parcel ID / CN নম্বর */}
                 <div className="bg-slate-50 dark:bg-[#141d1a] p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
                   <div className="absolute top-4 right-4">
                     {getDynamicStatusBadge(selectedPackedOrder.status)}
                   </div>
                   <p className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-2">Steadfast Parcel ID</p>
                   <p className="text-2xl font-black text-blue-700 dark:text-blue-400 tracking-wider font-mono">
-                    {selectedPackedOrder.consignmentId || selectedPackedOrder.orderNo || `ORD-${selectedPackedOrder.id}`}
+                    {selectedPackedOrder.consignmentId || selectedPackedOrder.trackingCode || selectedPackedOrder.orderNo || `ORD-${selectedPackedOrder.id}`}
                   </p>
                 </div>
 
@@ -691,7 +656,7 @@ export default function MixedPackingDashboard() {
                           />
                           <div className="flex-1">
                             <p className="font-bold text-slate-800 dark:text-gray-200 text-sm">{item.product?.name}</p>
-                            <div className="mt-2 inline-block bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 py-1.5 rounded-md text-xs font-bold text-slate-500 dark:text-gray-400 shadow-sm">
+                            <div className="mt-2 inline-block bg-slate-100 dark:bg-white/5 border border-slate-300 dark:border-white/10 px-3 py-1.5 rounded-md text-xs font-bold text-slate-500 dark:text-gray-400 shadow-sm">
                               Packed: 
                               <span className="mx-1.5 px-2 py-0.5 bg-white dark:bg-[#1a2421] border border-slate-300 dark:border-white/10 text-slate-800 dark:text-white text-sm font-black rounded shadow-sm">
                                 {item.quantity}

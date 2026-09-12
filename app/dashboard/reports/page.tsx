@@ -212,7 +212,7 @@ export default function ReportsAnalyticsPage() {
               <DollarSign size={20} />
             </div>
           </div>
-          <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Total Revenue</p>
+          <p className="text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Total Sells</p>
           <h3 className="text-2xl font-extrabold text-slate-800 dark:text-white">৳ {totalRevenue.toLocaleString('en-IN')}</h3>
         </div>
 

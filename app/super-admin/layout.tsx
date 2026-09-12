@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Store, CreditCard, Activity, Settings, 
   Menu, X, Sun, Moon, Bell, ChevronDown, ShieldCheck, Server, LogOut,
-  HelpCircle, Megaphone
+  HelpCircle, Megaphone,
+  Sliders
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,11 +25,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: "/super-admin", label: "Overview", icon: LayoutDashboard },
     { href: "/super-admin/shops", label: "All Shops", icon: Store },
     { href: "/super-admin/billing", label: "Billing & Revenue", icon: CreditCard },
+    { href: "/super-admin/plan-control", label: "Plan Control", icon: Sliders },
     { href: "/super-admin/tickets", label: "Support Tickets", icon: HelpCircle },
     { href: "/super-admin/broadcast", label: "Announcements", icon: Megaphone },
     { href: "/super-admin/system-health", label: "System Health", icon: Server },
     { href: "/super-admin/global-logs", label: "Global Logs", icon: Activity },
     { href: "/super-admin/settings", label: "Platform Settings", icon: Settings },
+    
   ];
 
   return (
@@ -83,7 +86,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         </nav>
 
         <div className="p-4 border-t border-slate-100 dark:border-white/5">
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 font-bold text-sm transition-colors">
+          <button onClick={() => signOut({ callbackUrl: "http://localhost:3001/login" })} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 font-bold text-sm transition-colors">
             <LogOut size={16} /> Exit Admin
           </button>
         </div>

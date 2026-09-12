@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Bell, ChevronDown, User, Settings, LogOut, 
   CreditCard, Package, AlertTriangle, CheckCircle2,
@@ -8,20 +8,79 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-// ডামি নোটিফিকেশন ডেটা
-const mockNotifications = [
-  { id: 1, type: "order", text: "New order #885 received from Anika.", time: "5 mins ago", read: false, icon: <Package size={16} className="text-blue-500"/>, bg: "bg-blue-50 dark:bg-blue-500/10" },
-  { id: 2, type: "alert", text: "Low stock warning: Premium Jamdani.", time: "1 hour ago", read: false, icon: <AlertTriangle size={16} className="text-amber-500"/>, bg: "bg-amber-50 dark:bg-amber-500/10" },
-  { id: 3, type: "success", text: "Order #882 successfully delivered.", time: "3 hours ago", read: true, icon: <CheckCircle2 size={16} className="text-emerald-500"/>, bg: "bg-emerald-50 dark:bg-emerald-500/10" },
-  { id: 4, type: "order", text: "New reseller order #R-102 placed.", time: "5 hours ago", read: true, icon: <Package size={16} className="text-indigo-500"/>, bg: "bg-indigo-50 dark:bg-indigo-500/10" },
-];
-
 export default function TopNavbar() {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true); // থিম টগল করার স্টেট
+  const [isDarkMode, setIsDarkMode] = useState(true); 
   
-  const unreadCount = mockNotifications.filter(n => !n.read).length;
+  // 🚀 ডাইনামিক স্টেট (কোনো ডামি ডেটা নেই)
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+  // 🚀 পেজ লোড হলে API থেকে নোটিফিকেশন ফেচ করা
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/notifications`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // 🚀 যা আসবে তা-ই দেখাবে, ফাঁকা থাকলে ফাঁকাই দেখাবে!
+        setNotifications(Array.isArray(data) ? data : []);
+      } else {
+        setNotifications([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications", error);
+      setNotifications([]);
+    }
+  };
+
+  // 🚀 নোটিফিকেশনে ক্লিক করলে Read মার্ক করা
+  const handleMarkAsRead = async (id: string | number) => {
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      await fetch(`${apiUrl}/notifications/${id}/read`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // 🚀 ডাইনামিক টাইম কনভার্টার
+  const timeAgo = (dateString: string) => {
+    if (!dateString) return "Just now";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  };
+
+  // 🚀 ডাইনামিক আইকন
+  const getIconDetails = (type: string) => {
+    switch (type) {
+      case 'order': return { icon: <Package size={16} className="text-blue-500"/>, bg: "bg-blue-50 dark:bg-blue-500/10" };
+      case 'warning':
+      case 'alert': return { icon: <AlertTriangle size={16} className="text-amber-500"/>, bg: "bg-amber-50 dark:bg-amber-500/10" };
+      case 'success': return { icon: <CheckCircle2 size={16} className="text-emerald-500"/>, bg: "bg-emerald-50 dark:bg-emerald-500/10" };
+      case 'return': return { icon: <AlertTriangle size={16} className="text-rose-500"/>, bg: "bg-rose-50 dark:bg-rose-500/10" };
+      default: return { icon: <Bell size={16} className="text-gray-500"/>, bg: "bg-gray-50 dark:bg-gray-500/10" };
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read && !n.isRead).length;
 
   return (
     <div className="h-20 px-6 flex items-center justify-end gap-4 bg-[#f8f9fc] dark:bg-[#0f1714] transition-colors relative z-50">
@@ -58,20 +117,39 @@ export default function TopNavbar() {
               </div>
 
               <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
-                {mockNotifications.map((notif) => (
-                  <div key={notif.id} className={`p-4 border-b border-gray-50 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition cursor-pointer flex gap-4 ${!notif.read ? 'bg-slate-50/50 dark:bg-white/5' : ''}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${notif.bg}`}>
-                      {notif.icon}
-                    </div>
-                    <div>
-                      <p className={`text-sm ${!notif.read ? 'font-bold text-slate-800 dark:text-gray-100' : 'text-slate-600 dark:text-gray-300'}`}>
-                        {notif.text}
-                      </p>
-                      <p className="text-[11px] text-gray-400 mt-1">{notif.time}</p>
-                    </div>
-                    {!notif.read && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-1.5 shrink-0"></div>}
+                {notifications.length > 0 ? (
+                  notifications.map((notif) => {
+                    const isRead = notif.read || notif.isRead;
+                    const { icon, bg } = getIconDetails(notif.type);
+                    
+                    return (
+                      <div 
+                        key={notif.id} 
+                        onClick={() => {
+                          if (!isRead) handleMarkAsRead(notif.id);
+                        }}
+                        className={`p-4 border-b border-gray-50 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition cursor-pointer flex gap-4 ${!isRead ? 'bg-slate-50/50 dark:bg-white/5' : ''}`}
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
+                          {icon}
+                        </div>
+                        <div>
+                          <p className={`text-sm ${!isRead ? 'font-bold text-slate-800 dark:text-gray-100' : 'text-slate-600 dark:text-gray-300'}`}>
+                            {notif.text || notif.message}
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            {notif.createdAt ? timeAgo(notif.createdAt) : (notif.time || 'Just now')}
+                          </p>
+                        </div>
+                        {!isRead && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-1.5 shrink-0"></div>}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-sm text-gray-500">
+                    No new notifications found.
                   </div>
-                ))}
+                )}
               </div>
 
               <div className="p-3 border-t border-gray-100 dark:border-white/5 text-center bg-slate-50 dark:bg-[#141d1a]">

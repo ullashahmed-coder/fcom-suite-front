@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Users, Shield, Eye, ShieldAlert, UserPlus, Search, 
   Mail, Phone, Clock, Key, CheckCircle2, X, Lock, Loader2, 
-  Trash2, Edit3, Ban, CheckCircle
+  Trash2, Edit3, Ban, CheckCircle, ArrowRight, DollarSign, Tag
 } from "lucide-react";
 
 // 🚀 সিস্টেমের সবগুলো পেজ/মডিউলের লিস্ট
@@ -17,9 +17,12 @@ const ALL_MODULES = [
   { id: "courier", label: "Courier Integration", desc: "Manage Steadfast/Pathao bookings" },
   { id: "products", label: "Products", desc: "Manage inventory and products" },
   { id: "reports", label: "Reports & Analytics", desc: "View financial and sales reports" },
+  { id: "announcements", label: "Announcements", desc: "View and manage announcements" },
   { id: "staff", label: "Staff & Payroll", desc: "Manage staff salaries and roster" },
   { id: "users", label: "System Users", desc: "Manage dashboard access and roles" },
   { id: "logs", label: "Activity Logs", desc: "View system audit trails" },
+  { id: "subscription", label: "Subscription", desc: "Manage billing and plans" },
+  { id: "tickets", label: "Support Tickets", desc: "Manage support requests" },
   { id: "settings", label: "Settings", desc: "Manage shop configurations" }
 ];
 
@@ -27,6 +30,9 @@ export default function SystemUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [limitErrorModal, setLimitErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   
   // Modals
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -42,16 +48,15 @@ export default function SystemUsersPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   const [newUser, setNewUser] = useState({
-    name: "", email: "", phone: "", role: "OPERATOR", password: ""
+    name: "", email: "", phone: "", role: "OPERATOR", password: "", basicSalary: 0, commission: 0
   });
 
   const [editUserForm, setEditUserForm] = useState({
-    id: "", name: "", phone: "", role: ""
+    id: "", name: "", phone: "", role: "", basicSalary: 0, commission: 0
   });
 
   const [newPassword, setNewPassword] = useState("");
 
-  // 🚀 ডাটাবেস থেকে ইউজার ফেচ করা
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("access_token");
@@ -64,7 +69,6 @@ export default function SystemUsersPage() {
         if (data.length > 0 && !selectedUser) {
           handleSelectUser(data[0]);
         } else if (selectedUser) {
-          // Update selected user info if already selected
           const updatedSelected = data.find((u: any) => u.id === selectedUser.id);
           if (updatedSelected) handleSelectUser(updatedSelected);
         }
@@ -83,22 +87,66 @@ export default function SystemUsersPage() {
   const handleSelectUser = (user: any) => {
     setSelectedUser(user);
     const isOwnerOrAdmin = user.role === "SHOP_OWNER" || user.role === "ADMIN";
-    const perms: Record<string, boolean> = {};
-    ALL_MODULES.forEach(mod => {
-      perms[mod.id] = isOwnerOrAdmin ? true : (mod.id === "orders" || mod.id === "packing"); 
-    });
-    setUserPermissions(perms);
+    
+    if (isOwnerOrAdmin) {
+      const perms: Record<string, boolean> = {};
+      ALL_MODULES.forEach(mod => { perms[mod.id] = true; });
+      setUserPermissions(perms);
+    } else {
+      // 🚀 ফিক্স: JSON পার্সার অ্যাড করা হলো যাতে ডাটা স্ট্রিং হিসেবে আসলেও ঠিকমতো কাজ করে
+      let parsedPerms = user.permissions;
+      if (typeof parsedPerms === 'string') {
+        try { parsedPerms = JSON.parse(parsedPerms); } 
+        catch (e) { parsedPerms = null; }
+      }
+
+      if (parsedPerms && Object.keys(parsedPerms).length > 0) {
+        setUserPermissions(parsedPerms);
+      } else {
+        const perms: Record<string, boolean> = {};
+        ALL_MODULES.forEach(mod => {
+          perms[mod.id] = (mod.id === "dashboard" || mod.id === "orders"); 
+        });
+        setUserPermissions(perms);
+      }
+    }
   };
 
-  const togglePermission = (moduleId: string) => {
-    if (selectedUser?.role === "SHOP_OWNER") return; 
-    setUserPermissions(prev => ({
-      ...prev,
-      [moduleId]: !prev[moduleId]
-    }));
+  // 🚀 ফিক্স: ডাটাবেসে রিয়েল-টাইম সেভ করার সাথে এরর চেকার
+  const togglePermission = async (moduleId: string) => {
+    if (selectedUser?.role === "SHOP_OWNER" || selectedUser?.role === "ADMIN") {
+      alert("Shop Owner and Admins have full access by default.");
+      return; 
+    }
+
+    const newPerms = { ...userPermissions, [moduleId]: !userPermissions[moduleId] };
+    setUserPermissions(newPerms); // UI-তে সাথে সাথে আপডেট
+
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${apiUrl}/users/${selectedUser.id}/permissions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ permissions: newPerms })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`❌ ডাটাবেসে সেভ হয়নি! ব্যাকএন্ড এরর: ${errData.message}`);
+        // সেভ না হলে আগের অবস্থায় ফিরিয়ে নেওয়া
+        setUserPermissions(userPermissions);
+        return;
+      }
+      
+      // স্টেট আপডেট করে রাখা যাতে ইউজার সোয়াইপ করলে ডাটা মুছে না যায়
+      setUsers(users.map(u => u.id === selectedUser.id ? { ...u, permissions: newPerms } : u));
+    } catch (error) {
+      console.error("Failed to update permissions", error);
+      alert("❌ সার্ভারের সাথে কানেক্ট করা যাচ্ছে না!");
+      setUserPermissions(userPermissions); // Revert
+    }
   };
 
-  // 🚀 ক্রিয়েট ইউজার
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -109,14 +157,16 @@ export default function SystemUsersPage() {
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(newUser)
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         alert(`✅ ${newUser.name}-কে সফলভাবে সিস্টেমে যুক্ত করা হয়েছে!`);
         setIsInviteModalOpen(false);
-        setNewUser({ name: "", email: "", phone: "", role: "OPERATOR", password: "" });
+        setNewUser({ name: "", email: "", phone: "", role: "OPERATOR", password: "", basicSalary: 0, commission: 0 });
         fetchUsers();
       } else {
-        const err = await res.json();
-        alert(`❌ এরর: ${err.message || 'ইউজার যুক্ত করা সম্ভব হয়নি'}`);
+        setErrorMessage(data.message || 'ইউজার যুক্ত করা সম্ভব হয়নি');
+        setIsInviteModalOpen(false); 
+        setLimitErrorModal(true);  
       }
     } catch (error) {
       alert("সার্ভার এরর! দয়া করে আবার চেষ্টা করুন।");
@@ -125,13 +175,14 @@ export default function SystemUsersPage() {
     }
   };
 
-  // 🚀 এডিট ইউজার
   const openEditModal = () => {
     setEditUserForm({
       id: selectedUser.id,
       name: selectedUser.name,
       phone: selectedUser.phone || "",
-      role: selectedUser.role
+      role: selectedUser.role,
+      basicSalary: selectedUser.basicSalary || 0,
+      commission: selectedUser.commission || 0
     });
     setIsEditModalOpen(true);
   };
@@ -144,7 +195,7 @@ export default function SystemUsersPage() {
       const res = await fetch(`${apiUrl}/users/${editUserForm.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ name: editUserForm.name, phone: editUserForm.phone, role: editUserForm.role })
+        body: JSON.stringify(editUserForm) 
       });
       if (res.ok) {
         setIsEditModalOpen(false);
@@ -160,7 +211,6 @@ export default function SystemUsersPage() {
     }
   };
 
-  // 🚀 ডাইরেক্ট পাসওয়ার্ড রিসেট
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -190,7 +240,6 @@ export default function SystemUsersPage() {
     }
   };
 
-  // 🚀 সাসপেন্ড/অ্যাক্টিভেট ইউজার
   const handleToggleStatus = async () => {
     if (selectedUser.role === "SHOP_OWNER") {
       alert("Shop Owner-কে সাসপেন্ড করা যাবে না!");
@@ -219,7 +268,6 @@ export default function SystemUsersPage() {
     }
   };
 
-  // 🚀 ডিলিট ইউজার
   const handleDeleteUser = async () => {
     if (selectedUser.role === "SHOP_OWNER") {
       alert("Shop Owner-কে ডিলিট করা যাবে না!");
@@ -407,7 +455,7 @@ export default function SystemUsersPage() {
                   {selectedUser.role}
                 </span>
 
-                {/* 🚀 NEW: Quick Actions for Edit, Suspend, Delete */}
+                {/* Quick Actions */}
                 {selectedUser.role !== 'SHOP_OWNER' && (
                   <div className="flex items-center justify-center gap-2 mt-4">
                     <button onClick={openEditModal} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors border border-blue-200 dark:border-blue-500/20">
@@ -425,6 +473,21 @@ export default function SystemUsersPage() {
 
               <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
                 
+                {/* Salary & Commission Details */}
+                <div className="mb-6">
+                  <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Payroll Information</h3>
+                  <div className="bg-emerald-50/50 dark:bg-[#141d1a] p-3.5 rounded-xl border border-emerald-100 dark:border-white/5 space-y-2.5 text-xs">
+                    <p className="flex justify-between items-center text-slate-700 dark:text-gray-300">
+                      <span className="flex items-center gap-2 font-bold"><DollarSign size={14} className="text-emerald-600"/> Basic Salary:</span>
+                      <span className="font-bold">৳ {selectedUser.basicSalary || 0} / month</span>
+                    </p>
+                    <p className="flex justify-between items-center text-slate-700 dark:text-gray-300">
+                      <span className="flex items-center gap-2 font-bold"><Tag size={14} className="text-amber-600"/> Commission Rate:</span>
+                      <span className="font-bold">৳ {selectedUser.commission || 0}</span>
+                    </p>
+                  </div>
+                </div>
+
                 {/* Contact Info */}
                 <div className="mb-6">
                   <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Contact Info</h3>
@@ -443,24 +506,29 @@ export default function SystemUsersPage() {
                   </div>
                   
                   <div className="space-y-2.5 pb-4">
-                    {ALL_MODULES.map((module) => (
-                      <div key={module.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#141d1a] rounded-lg border border-gray-100 dark:border-white/5">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-800 dark:text-white">{module.label}</h4>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{module.desc}</p>
+                    {ALL_MODULES.map((module) => {
+                      const isOwnerOrAdmin = selectedUser.role === 'SHOP_OWNER' || selectedUser.role === 'ADMIN';
+                      const hasAccess = isOwnerOrAdmin ? true : !!userPermissions[module.id];
+
+                      return (
+                        <div key={module.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#141d1a] rounded-lg border border-gray-100 dark:border-white/5">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 dark:text-white">{module.label}</h4>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{module.desc}</p>
+                          </div>
+                          
+                          <div 
+                            onClick={() => togglePermission(module.id)}
+                            className={`w-9 h-5 rounded-full flex items-center p-1 cursor-pointer transition-colors ${
+                              isOwnerOrAdmin ? 'bg-emerald-500 opacity-50 cursor-not-allowed' : 
+                              hasAccess ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-700'
+                            }`}
+                          >
+                            <div className={`w-3.5 h-3.5 bg-white rounded-full transition-transform ${hasAccess ? 'translate-x-3.5' : ''}`}></div>
+                          </div>
                         </div>
-                        
-                        <div 
-                          onClick={() => togglePermission(module.id)}
-                          className={`w-9 h-5 rounded-full flex items-center p-1 cursor-pointer transition-colors ${
-                            selectedUser.role === 'SHOP_OWNER' ? 'bg-emerald-500 opacity-50 cursor-not-allowed' : 
-                            userPermissions[module.id] ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-700'
-                          }`}
-                        >
-                          <div className={`w-3.5 h-3.5 bg-white rounded-full transition-transform ${userPermissions[module.id] ? 'translate-x-3.5' : ''}`}></div>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -544,6 +612,29 @@ export default function SystemUsersPage() {
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-gray-400">Basic Salary (৳)</label>
+                  <input 
+                    type="number" min="0"
+                    placeholder="e.g. 10000" 
+                    value={newUser.basicSalary || ""}
+                    onChange={(e) => setNewUser({...newUser, basicSalary: Number(e.target.value)})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-gray-400">Commission (৳ or %)</label>
+                  <input 
+                    type="number" min="0"
+                    placeholder="e.g. 50" 
+                    value={newUser.commission || ""}
+                    onChange={(e) => setNewUser({...newUser, commission: Number(e.target.value)})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-slate-600 dark:text-gray-400">Set Initial Password *</label>
                 <div className="relative mt-1.5">
@@ -618,6 +709,29 @@ export default function SystemUsersPage() {
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-gray-400">Basic Salary (৳)</label>
+                  <input 
+                    type="number" min="0"
+                    placeholder="e.g. 10000" 
+                    value={editUserForm.basicSalary || ""}
+                    onChange={(e) => setEditUserForm({...editUserForm, basicSalary: Number(e.target.value)})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-gray-400">Commission (৳)</label>
+                  <input 
+                    type="number" min="0"
+                    placeholder="e.g. 50" 
+                    value={editUserForm.commission || ""}
+                    onChange={(e) => setEditUserForm({...editUserForm, commission: Number(e.target.value)})}
+                    className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
               <div className="pt-2">
                 <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-2 disabled:opacity-70">
                   {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />} 
@@ -669,6 +783,45 @@ export default function SystemUsersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= STAFF LIMIT EXCEEDED MODAL ================= */}
+      {limitErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden p-6 text-center">
+            
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+              <ShieldAlert size={32} />
+            </div>
+
+            <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-2">
+              Staff Limit Reached!
+            </h3>
+            
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              {errorMessage}
+            </p>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setLimitErrorModal(false)}
+                className="flex-1 py-3 rounded-xl font-bold text-slate-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setLimitErrorModal(false);
+                  window.location.href = "/dashboard/subscription";
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-colors shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 cursor-pointer"
+              >
+                Upgrade Plan <ArrowRight size={16} />
+              </button>
+            </div>
+
           </div>
         </div>
       )}

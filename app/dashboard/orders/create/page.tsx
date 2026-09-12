@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Trash2, ShoppingBag, User, MapPin, Phone, Loader2, Package, ArrowLeft, Receipt, ClipboardEdit, Truck, Zap, Tag, CheckCircle2, AlertCircle } from "lucide-react"
+import { Search, Plus, Trash2, ShoppingBag, User, MapPin, Phone, Loader2, Package, ArrowLeft, Receipt, ClipboardEdit, Truck, Zap, Tag, CheckCircle2, AlertCircle, ShieldAlert, ArrowRight, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -11,13 +11,14 @@ export default function CreateNewOrderPage() {
   const [availableProducts, setAvailableProducts] = useState<any[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [settings, setSettings] = useState({ insideDhaka: 60, outsideDhaka: 120, tangail: 80 })
   const [cart, setCart] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [customDeliveryCharge, setCustomDeliveryCharge] = useState<number | string>("")
   const [discount, setDiscount] = useState<number | string>("")
 
-  const [isResellerOrder, setIsResellerOrder] = useState(false)
+  // 🚀 সুন্দর পপ-আপ মোডালের জন্য স্টেট
+  const [limitModalOpen, setLimitModalOpen] = useState(false)
+  const [limitErrorMessage, setLimitErrorMessage] = useState("")
 
   const [customer, setCustomer] = useState({
     phone: "",
@@ -29,31 +30,42 @@ export default function CreateNewOrderPage() {
     isFullPaid: false,
   })
 
+  // 🚀 ডেলিভারি চার্জের ডাইনামিক স্টেট
+  const [shippingRates, setShippingRates] = useState({
+    inside: 60,
+    outside: 120,
+    sub: 80,
+    subName: "Tangail City"
+  });
+
   const [steadfastNote, setSteadfastNote] = useState("")
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   useEffect(() => {
-    fetchSettings()
-    fetchProducts()
-  }, [])
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch(`${apiUrl}/settings`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.insideDhaka) {
-          setSettings({
-            insideDhaka: Number(data.insideDhaka),
-            outsideDhaka: Number(data.outsideDhaka),
-            tangail: data.tangail ? Number(data.tangail) : 80
-          })
+    const fetchSettings = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        const res = await fetch(`${apiUrl}/settings`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // ব্যাকএন্ড থেকে আসা ডাইনামিক ডেটা সেট করা হচ্ছে
+          setShippingRates({
+            inside: data.insideDhakaCharge || 60,
+            outside: data.outsideDhakaCharge || 120,
+            sub: data.subCityCharge || 80,
+            subName: data.subCityName || "Tangail City"
+          });
         }
+      } catch (error) {
+        console.error("Settings fetch error:", error);
       }
-    } catch (err) {
-      console.error("Failed to fetch settings", err)
-    }
-  }
+    };
+    
+    fetchSettings();
+    fetchProducts();
+  }, [])
 
   const fetchProducts = async () => {
     try {
@@ -63,8 +75,6 @@ export default function CreateNewOrderPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        
-        // 🚀 isArchived চেকটা বাদ দিয়ে শুধু isDeleted চেক করা হলো
         const activeProducts = data.filter((product: any) => !product.isDeleted)
         setAvailableProducts(activeProducts)
       }
@@ -75,7 +85,6 @@ export default function CreateNewOrderPage() {
     }
   }
 
-  // 🚀 কাস্টমার অটো-ফিল লজিক উন্নত করা হলো
   useEffect(() => {
     const checkExistingCustomer = async () => {
       if (customer.phone.length === 11) {
@@ -141,7 +150,6 @@ export default function CreateNewOrderPage() {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let input = e.target.value;
-
     const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
     input = input.replace(/[০-৯]/g, (match) => banglaDigits.indexOf(match).toString());
     input = input.replace(/[^0-9+]/g, '');
@@ -153,7 +161,6 @@ export default function CreateNewOrderPage() {
     }
 
     input = input.replace(/[^0-9]/g, '');
-
     if (input.length > 11) {
       input = input.substring(0, 11);
     }
@@ -163,13 +170,14 @@ export default function CreateNewOrderPage() {
 
   const isPhoneValid = customer.phone.length === 11 && customer.phone.startsWith("01");
 
+  // 🚀 ডাইনামিক ডেলিভারি চার্জ ক্যালকুলেশন
   let deliveryCharge = 0
   if (customer.district === "Inside Dhaka") {
-    deliveryCharge = settings.insideDhaka
+    deliveryCharge = shippingRates.inside
   } else if (customer.district === "Outside Dhaka") {
-    deliveryCharge = settings.outsideDhaka
-  } else if (customer.district === "Tangail City") {
-    deliveryCharge = settings.tangail
+    deliveryCharge = shippingRates.outside
+  } else if (customer.district === shippingRates.subName) {
+    deliveryCharge = shippingRates.sub
   } else if (customer.district === "Custom") {
     deliveryCharge = Number(customDeliveryCharge) || 0
   }
@@ -178,7 +186,6 @@ export default function CreateNewOrderPage() {
   const discountAmount = Number(discount) || 0
   
   const totalAmount = (subtotal + deliveryCharge) - discountAmount
-  
   const advanceAmount = Math.min(Number(customer.advance) || 0, totalAmount)
   const dueAmount = totalAmount - advanceAmount
 
@@ -205,7 +212,6 @@ export default function CreateNewOrderPage() {
     setSteadfastNote(noteText);
   }, [deliveryCharge, customer.isFullPaid, dueAmount, cart.length])
 
-  // 🚀 ডাটাবেস লজিক সরিয়ে API কল বসানো হয়েছে
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -232,7 +238,6 @@ export default function CreateNewOrderPage() {
 
     setIsLoading(true)
 
-    // 🚀 ব্যাকএন্ডে পাঠানোর জন্য JSON অবজেক্ট তৈরি
     const orderData = {
       customerName: customer.name,
       customerPhone: customer.phone,
@@ -261,6 +266,13 @@ export default function CreateNewOrderPage() {
         body: JSON.stringify(orderData)
       });
 
+      if (response.status === 403) {
+        const errorData = await response.json();
+        setLimitErrorMessage(errorData.message || "আপনার মান্থলি অর্ডার লিমিট শেষ হয়ে গেছে!");
+        setLimitModalOpen(true);
+        return;
+      }
+
       if (response.ok) {
         alert("✅ আলহামদুলিল্লাহ! অর্ডারটি সফলভাবে সেভ হয়েছে।");
         router.push("/dashboard/orders");
@@ -285,7 +297,7 @@ export default function CreateNewOrderPage() {
   })
 
   return (
-    <div className="space-y-6 pb-10 max-w-[1400px] mx-auto transition-colors">
+    <div className="space-y-6 pb-10 max-w-[1400px] mx-auto transition-colors relative">
 
       {/* ================= Page Header ================= */}
       <div className="flex items-center gap-4 pb-4 border-b border-slate-200 dark:border-white/5">
@@ -341,7 +353,6 @@ export default function CreateNewOrderPage() {
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 h-[400px] overflow-y-auto custom-scrollbar pr-1 sm:pr-2">
                 {filteredProducts.map((product) => {
-
                   const qtyInCart = cart.find(c => c.id === product.id)?.qty || 0;
                   const availableNow = product.stock - qtyInCart;
 
@@ -487,9 +498,9 @@ export default function CreateNewOrderPage() {
                     className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white border border-slate-200 dark:border-white/5 rounded-lg text-sm focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] outline-none appearance-none transition-colors"
                   >
                     <option value="">Select Delivery Area</option>
-                    <option value="Inside Dhaka">Inside Dhaka (৳ {settings.insideDhaka})</option>
-                    <option value="Outside Dhaka">Outside Dhaka (৳ {settings.outsideDhaka})</option>
-                    <option value="Tangail City">Tangail City (৳ {settings.tangail})</option>
+                    <option value="Inside Dhaka">Inside Dhaka (৳ {shippingRates.inside})</option>
+                    <option value="Outside Dhaka">Outside Dhaka (৳ {shippingRates.outside})</option>
+                    <option value={shippingRates.subName}>{shippingRates.subName} (৳ {shippingRates.sub})</option>
                     <option value="Custom">Custom Charge</option>
                   </select>
                 </div>
@@ -629,9 +640,7 @@ export default function CreateNewOrderPage() {
               </div>
               <div className="flex justify-between text-slate-600 dark:text-gray-400 items-center">
                 <span>Delivery Charge <span className="text-[10px] bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded ml-1 text-slate-500 dark:text-gray-300">{customer.district}</span></span>
-                <span className="font-bold text-slate-800 dark:text-white">
-                  + ৳ {deliveryCharge}
-                </span>
+                <span className="font-bold text-slate-800 dark:text-white">+ ৳ {deliveryCharge}</span>
               </div>
 
               {discountAmount > 0 && (
@@ -677,6 +686,49 @@ export default function CreateNewOrderPage() {
 
         </div>
       </form>
+
+      {/* ================= 🚀 PREMIER LIMIT EXCEEDED MODAL ================= */}
+      {limitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden p-6 text-center">
+            
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+              <ShieldAlert size={32} />
+            </div>
+
+            <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-2">
+              Monthly Order Limit Reached!
+            </h3>
+            
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+              {limitErrorMessage} <br />
+              আনলিমিটেড অর্ডার প্রসেস করতে অনুগ্রহ করে আপনার প্ল্যানটি আপগ্রেড করুন।
+            </p>
+
+            <div className="flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setLimitModalOpen(false)}
+                className="flex-1 py-3 rounded-xl font-bold text-slate-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  setLimitModalOpen(false);
+                  router.push("/dashboard/subscription");
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-colors shadow-lg shadow-indigo-500/30 flex justify-center items-center gap-2 cursor-pointer"
+              >
+                Upgrade Plan <ArrowRight size={16} />
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

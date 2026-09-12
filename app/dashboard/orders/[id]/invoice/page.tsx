@@ -1,141 +1,265 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Printer, ArrowLeft, Loader2 } from "lucide-react"
+import { Printer, ArrowLeft, Loader2, Download } from "lucide-react"
+import * as htmlToImage from "html-to-image"
 
 export default function InvoicePrintPage() {
   const params = useParams()
   const router = useRouter()
   const orderId = params.id
+  
   const [order, setOrder] = useState<any>(null)
+  const [storeSettings, setStoreSettings] = useState<any>(null) 
+  const [isError, setIsError] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  
+  const invoiceRef = useRef<HTMLDivElement>(null)
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   useEffect(() => {
     if (orderId) {
       fetchOrderData(orderId)
+      fetchSettingsData() 
     }
   }, [orderId])
 
   const fetchOrderData = async (id: any) => {
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/orders/${id}`, {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token")
+      const res = await fetch(`${apiUrl}/orders/${id}`, {
         headers: { "Authorization": `Bearer ${token}` }
       })
       if (res.ok) {
-        setOrder(await res.json())
+        const data = await res.json()
+        setOrder(data)
+      } else {
+        setIsError(true)
       }
     } catch (err) {
       console.error("Failed to fetch order", err)
+      setIsError(true)
     }
   }
 
-  // ডেটা লোড হলে অটোমেটিক Print ডায়লগ ওপেন হবে
-  useEffect(() => {
-    if (order) {
-      setTimeout(() => {
-        window.print()
-      }, 500)
+  const fetchSettingsData = async () => {
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token")
+      const res = await fetch(`${apiUrl}/settings`, {
+        headers: { "Authorization": `Bearer ${token}` } 
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        const settingsObj = Array.isArray(data) ? data[0] : data
+        setStoreSettings(settingsObj)
+      }
+    } catch (err) {
+      console.error("Failed to fetch settings", err)
     }
-  }, [order])
+  }
+
+  const handleDownloadImage = async () => {
+    if (!invoiceRef.current) return;
+    try {
+      setIsDownloading(true);
+      
+      const dataUrl = await htmlToImage.toPng(invoiceRef.current, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+        width: 680,
+        style: {
+          margin: "0",
+          left: "0",
+          position: "relative"
+        }
+      });
+      
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `Invoice_${order.orderNo || order.id}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Image download failed:", error);
+      alert("ইমেজ ডাউনলোড করতে সমস্যা হচ্ছে!");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8f9fc] dark:bg-[#0f1714] gap-4 transition-colors">
+        <p className="text-red-500 font-bold">অর্ডারটি খুঁজে পাওয়া যায়নি অথবা সার্ভার এরর!</p>
+        {/* 🚀 ফিক্স: এরর পেজেও ব্যাক বাটন ঠিক করা হলো */}
+        <button onClick={() => router.push('/dashboard/orders')} className="px-4 py-2 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold">Go Back to Orders</button>
+      </div>
+    )
+  }
 
   if (!order) {
-    return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-gray-500" size={40} /></div>
+    return <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc] dark:bg-[#0f1714] transition-colors"><Loader2 className="animate-spin text-emerald-600" size={40} /></div>
   }
 
-  const dueAmount = (order.totalAmount + order.deliveryCharge) - (order.discount || 0) - (order.advancePayment || 0)
+  const advancePaid = Number(order.advance) || 0;
+  const discountAmount = Number(order.discount) || 0;
+  const deliveryCharge = Number(order.deliveryCharge) || 0;
+  const subTotal = Number(order.totalAmount) - deliveryCharge + discountAmount;
+  const dueAmount = Number(order.totalAmount) - advancePaid;
+
+  const watermarkLogo = storeSettings?.logoUrl || storeSettings?.storeLogo || storeSettings?.logo;
 
   return (
-    <div className="bg-gray-100 min-h-screen p-4 sm:p-8 font-sans text-black">
+    <div className="bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-8 font-sans transition-colors">
       
-      {/* 🖨️ Action Bar (Hide in Print Mode) */}
-      <div className="max-w-2xl mx-auto mb-6 flex justify-between items-center print:hidden bg-white p-4 rounded-xl shadow-sm">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium text-sm">
+      {/* 🖨️ Action Bar */}
+      <div className="max-w-2xl mx-auto mb-6 flex justify-between items-center print:hidden bg-white dark:bg-[#1a2421] p-4 rounded-xl shadow-sm border border-slate-200 dark:border-white/5 transition-colors">
+        
+        {/* 🚀 ফিক্স: router.back() এর বদলে নির্দিষ্ট রাউট সেট করা হলো */}
+        <button onClick={() => router.push('/dashboard/orders')} className="flex items-center gap-2 text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors cursor-pointer">
           <ArrowLeft size={16} /> Back
         </button>
-        <button onClick={() => window.print()} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-black transition">
-          <Printer size={16} /> Print Invoice
-        </button>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleDownloadImage} 
+            disabled={isDownloading}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition shadow-sm cursor-pointer disabled:opacity-70"
+          >
+            {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Save Image
+          </button>
+
+          <button onClick={() => window.print()} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-emerald-700 transition shadow-sm cursor-pointer">
+            <Printer size={16} /> Print
+          </button>
+        </div>
       </div>
 
-      {/* 📄 Printable Invoice Card (A4/POS Style) */}
-      <div className="max-w-2xl mx-auto bg-white p-8 sm:p-10 shadow-lg print:shadow-none print:p-0 print:max-w-full">
+      {/* 📄 Printable Invoice Card (Premium Look) */}
+      <div 
+        ref={invoiceRef} 
+        className="max-w-2xl mx-auto bg-white text-slate-900 pt-10 px-10 pb-12 shadow-xl rounded-xl print:shadow-none print:p-0 print:max-w-full print:rounded-none relative overflow-hidden border-t-[12px] border-[#7A1B38] print:border-t-[12px] print:border-[#7A1B38]"
+      >
         
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-2 border-gray-200 pb-6 mb-6">
-          <div>
-            <h1 className="text-3xl font-black text-[#7A1B38]">CHORKA / DESHIO TATI</h1>
-            <p className="text-sm text-gray-500 mt-1">Tangail, Bangladesh</p>
-            <p className="text-sm text-gray-500">Phone: +880 1XXXXXXXXX</p>
+        {/* 💧 Watermark Logo */}
+        {watermarkLogo && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none opacity-[0.08]">
+            <img 
+              src={watermarkLogo.startsWith('http') ? watermarkLogo : `${apiUrl}${watermarkLogo}`} 
+              alt="Watermark" 
+              className="w-64 h-64 object-contain" 
+            />
           </div>
-          <div className="text-right">
-            <h2 className="text-2xl font-bold text-gray-800 uppercase tracking-widest">INVOICE</h2>
-            <p className="text-sm text-gray-600 mt-1 font-bold">Order ID: #{order.id}</p>
-            <p className="text-xs text-gray-500">Date: {new Date(order.createdAt).toLocaleDateString()}</p>
-          </div>
-        </div>
+        )}
 
-        {/* Customer Info */}
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Billed To</h3>
-          <p className="text-base font-bold text-gray-800">{order.customerName}</p>
-          <p className="text-sm text-gray-600 mt-1">{order.address}</p>
-          <p className="text-sm text-gray-600">{order.district}</p>
-          <p className="text-sm font-bold text-gray-800 mt-2">Phone: {order.customerPhone}</p>
-        </div>
-
-        {/* Items Table */}
-        <table className="w-full text-left border-collapse mb-8">
-          <thead>
-            <tr className="border-b-2 border-gray-800 text-sm">
-              <th className="py-3 font-bold text-gray-800">Description</th>
-              <th className="py-3 font-bold text-gray-800 text-center">Qty</th>
-              <th className="py-3 font-bold text-gray-800 text-right">Price</th>
-              <th className="py-3 font-bold text-gray-800 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm text-gray-700">
-            {order.items?.map((item: any, index: number) => (
-              <tr key={index} className="border-b border-gray-100">
-                <td className="py-3">{item.product?.name || "Product Item"}</td>
-                <td className="py-3 text-center">{item.quantity}</td>
-                <td className="py-3 text-right">৳ {item.price}</td>
-                <td className="py-3 text-right font-medium">৳ {item.quantity * item.price}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Calculation */}
-        <div className="flex justify-end mb-8">
-          <div className="w-64 space-y-2 text-sm text-gray-600">
-            <div className="flex justify-between"><span>Subtotal:</span> <span className="font-medium text-gray-800">৳ {order.totalAmount}</span></div>
-            <div className="flex justify-between"><span>Delivery Charge:</span> <span className="font-medium text-gray-800">+ ৳ {order.deliveryCharge}</span></div>
-            {order.discount > 0 && <div className="flex justify-between text-blue-600"><span>Discount:</span> <span>- ৳ {order.discount}</span></div>}
-            {order.advancePayment > 0 && <div className="flex justify-between text-green-600"><span>Advance Paid:</span> <span>- ৳ {order.advancePayment}</span></div>}
-            
-            <div className="flex justify-between border-t-2 border-gray-800 pt-2 mt-2">
-              <span className="font-bold text-gray-800 text-base">Total Due (COD):</span> 
-              <span className="font-black text-[#7A1B38] text-lg">৳ {dueAmount > 0 ? dueAmount : 0}</span>
+        <div className="relative z-10">
+          {/* Header */}
+          <div className="flex justify-between items-start pb-8 mb-8 border-b border-slate-100">
+            <div>
+              <h1 className="text-4xl font-black text-[#7A1B38] uppercase tracking-tight">
+                {storeSettings?.storeName || storeSettings?.name || storeSettings?.shopName || "DESHIO TATI"}
+              </h1>
+              <p className="text-sm text-slate-500 mt-2 whitespace-pre-wrap leading-relaxed">
+                {storeSettings?.businessAddress || storeSettings?.address || "Tangail, Bangladesh"}
+              </p>
+              <p className="text-sm text-slate-500 font-medium mt-1">
+                Phone: <span className="text-slate-800">{storeSettings?.supportPhone || storeSettings?.phone || "+880 1XXXXXXXXX"}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-3xl font-black text-slate-800 uppercase tracking-widest opacity-20 mb-2">Invoice</h2>
+              <p className="text-sm text-slate-800 mt-1 font-bold">
+                {order.trackingCode ? `CN: ${order.trackingCode}` : (order.orderNo || `ORD-${order.id}`)}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">Issue Date: {new Date(order.createdAt).toLocaleDateString('en-GB')}</p>
             </div>
           </div>
-        </div>
 
-        {/* Footer/Notes */}
-        <div className="border-t border-gray-200 pt-6 mt-10">
-          <p className="text-xs text-gray-500 font-medium">Note: {order.courierNote}</p>
-          <p className="text-xs text-gray-400 mt-2 italic text-center">Thank you for shopping with us!</p>
+          {/* Customer Info */}
+          <div className="mb-10">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Billed To</h3>
+            <div className="border-l-4 border-[#7A1B38] pl-4 py-1">
+              <p className="text-lg font-bold text-slate-800">{order.customer?.name}</p>
+              <p className="text-sm text-slate-600 mt-1 leading-relaxed">{order.customer?.address}</p>
+              <p className="text-sm text-slate-600">{order.customer?.district}</p>
+              <p className="text-sm font-bold text-slate-800 mt-2">Phone: {order.customer?.phone}</p>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <table className="w-full text-left border-collapse mb-8">
+            <thead>
+              <tr className="border-y-2 border-slate-800 text-sm">
+                <th className="py-3.5 font-bold text-slate-800 uppercase text-xs tracking-wider">Description</th>
+                <th className="py-3.5 font-bold text-slate-800 text-center uppercase text-xs tracking-wider">Qty</th>
+                <th className="py-3.5 font-bold text-slate-800 text-right uppercase text-xs tracking-wider">Price</th>
+                <th className="py-3.5 font-bold text-slate-800 text-right uppercase text-xs tracking-wider">Total</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm text-slate-700">
+              {order.items?.map((item: any, index: number) => (
+                <tr key={index} className="border-b border-slate-100 last:border-b-0">
+                  <td className="py-4 font-medium">{item.product?.name || "Unknown Product"}</td>
+                  <td className="py-4 text-center">{item.quantity}</td>
+                  <td className="py-4 text-right">৳ {item.price}</td>
+                  <td className="py-4 text-right font-bold text-slate-800">৳ {item.quantity * item.price}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Calculation */}
+          <div className="flex justify-end mb-10">
+            <div className="w-72">
+              <div className="space-y-2.5 text-sm text-slate-600 mb-4 px-2">
+                <div className="flex justify-between"><span>Subtotal:</span> <span className="font-medium text-slate-800">৳ {subTotal}</span></div>
+                <div className="flex justify-between"><span>Delivery Charge:</span> <span className="font-medium text-slate-800">+ ৳ {deliveryCharge}</span></div>
+                {discountAmount > 0 && <div className="flex justify-between text-blue-600"><span>Discount:</span> <span>- ৳ {discountAmount}</span></div>}
+                {advancePaid > 0 && <div className="flex justify-between text-emerald-600"><span>Advance Paid:</span> <span>- ৳ {advancePaid}</span></div>}
+              </div>
+              
+              <div className="bg-[#7A1B38]/5 border border-[#7A1B38]/20 rounded-xl p-4 flex justify-between items-center">
+                <span className="font-bold text-slate-800 text-sm uppercase tracking-wider">Total Due (COD)</span> 
+                <span className="font-black text-[#7A1B38] text-xl">৳ {dueAmount > 0 ? dueAmount : 0}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer/Notes */}
+          <div className="border-t border-slate-100 pt-6 flex flex-col items-center justify-center text-center">
+            {order.note && <p className="text-xs text-slate-600 font-bold mb-1">📝 Customer Note: {order.note}</p>}
+            
+            {/* 🚀 ফিক্স: ডাইনামিক এবং সেইফ কুরিয়ার নোট লজিক */}
+            {dueAmount > 0 ? (
+              <p className="text-xs text-black-600 font-black text-base uppercase tracking-wide">
+                🚚 Courier Note: Collect Cash ৳ {dueAmount} 
+                {order.courierNote && !order.courierNote.includes("Full Paid") ? ` | ${order.courierNote}` : ""}
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-600 font-bold">
+                🚚 Courier Note: {order.courierNote || "Full Paid Parcel. Do Not Collect Any Cash!"}
+              </p>
+            )}
+            
+            <p className="text-xs text-slate-400 mt-6 font-medium">Thank you for shopping with us!</p>
+          </div>
         </div>
 
       </div>
 
-      {/* 🚀 CSS for Print (This hides the action bar and background when printing) */}
+      {/* 🚀 CSS for Print */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           body { background-color: white !important; }
           .print\\:hidden { display: none !important; }
           .print\\:shadow-none { box-shadow: none !important; }
           .print\\:p-0 { padding: 0 !important; }
+          .print\\:rounded-none { border-radius: 0 !important; }
+          .print\\:border-t-\\[12px\\] { border-top-width: 12px !important; }
+          .print\\:border-\\[\\#7A1B38\\] { border-color: #7A1B38 !important; }
         }
       `}} />
     </div>

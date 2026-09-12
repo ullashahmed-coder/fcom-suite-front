@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import PlatformAnnouncement from "../components/PlatformAnnouncement";
-// (পাথটি আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী ঠিক করে নেবেন, যেমন: "../components/PlatformAnnouncement" হতে পারে)
+// (পাথটি আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী ঠিক করে নেবেন)
 
 import {
   DollarSign,
@@ -137,6 +137,11 @@ export default function TenantDashboardHome() {
   const [kpiStats, setKpiStats] = useState<any>(null);
   const [activityFeed, setActivityFeed] = useState<ActivityEntry[]>([]);
   const [teamStats, setTeamStats] = useState<TeamMember[]>([]);
+  
+  // 🚀 নতুন স্টেট: ডিস্ট্রিক্ট সেলস এর ডেটা রাখার জন্য
+  const [districtSales, setDistrictSales] = useState<DistrictSales[]>([]);
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   useEffect(() => {
     // 1. LocalStorage Data
@@ -154,7 +159,6 @@ export default function TenantDashboardHome() {
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem("access_token");
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
         const headers = { "Authorization": `Bearer ${token}` };
 
         // 👉 Fetch Products
@@ -177,7 +181,7 @@ export default function TenantDashboardHome() {
            }
         } catch (e) {}
 
-        // 🚀 Fetch Orders & Calculate KPIs Dynamically
+        // 🚀 Fetch Orders & Calculate KPIs & District Sales
         try {
            const resOrders = await fetch(`${apiUrl}/orders`, { headers });
            if (resOrders.ok) {
@@ -188,20 +192,19 @@ export default function TenantDashboardHome() {
              
              // আজকের অর্ডার ফিল্টার করা
              const todaysOrders = ordersData.filter((o: any) => {
-               if(!o.createdAt) return false;
+               if(!o.createdAt || o.isDeleted) return false;
                return new Date(o.createdAt).toDateString() === todayString;
              });
 
              // সেলস এবং কাউন্ট বের করা
              const salesToday = todaysOrders.reduce((sum: number, o: any) => {
-               // total, grandTotal বা codAmount যেটা পাওয়া যায় সেটাই যোগ করবে
-               const amount = Number(o.total) || Number(o.grandTotal) || Number(o.codAmount) || 0;
+               const amount = Number(o.totalAmount) || Number(o.total) || Number(o.grandTotal) || Number(o.codAmount) || 0;
                return sum + amount;
              }, 0);
              
              const ordersCount = todaysOrders.length;
-             const pendingPacking = ordersData.filter((o: any) => o.status === 'NEW_ORDER' || o.status === 'PENDING').length;
-             const pendingCourier = ordersData.filter((o: any) => o.status === 'PACKED' || o.status === 'READY_TO_SHIP').length;
+             const pendingPacking = ordersData.filter((o: any) => !o.isDeleted && (o.status === 'NEW_ORDER' || o.status === 'PENDING')).length;
+             const pendingCourier = ordersData.filter((o: any) => !o.isDeleted && (o.status === 'PACKED' || o.status === 'READY_TO_SHIP' || o.status === 'COURIER_PENDING')).length;
 
              setKpiStats({
                salesToday,
@@ -210,8 +213,38 @@ export default function TenantDashboardHome() {
                pendingCourier,
                returnsToday: 0
              });
+
+             // 🚀 District Sales Calculation
+             const districtMap: Record<string, number> = {};
+             let totalSalesAllDistricts = 0;
+
+             ordersData.forEach((o: any) => {
+               if (!o.isDeleted && o.customer?.district) {
+                 const amount = Number(o.totalAmount) || Number(o.total) || 0;
+                 if (amount > 0) {
+                   const distName = o.customer.district.trim();
+                   districtMap[distName] = (districtMap[distName] || 0) + amount;
+                   totalSalesAllDistricts += amount;
+                 }
+               }
+             });
+
+             const districtColors = ["bg-emerald-500 dark:bg-emerald-400", "bg-blue-500 dark:bg-blue-400", "bg-purple-500 dark:bg-purple-400", "bg-amber-500 dark:bg-amber-400", "bg-rose-500 dark:bg-rose-400"];
+             
+             const districtArr = Object.entries(districtMap)
+               .map(([name, amount], idx) => ({
+                 id: idx,
+                 name,
+                 amount: amount as number,
+                 percent: totalSalesAllDistricts > 0 ? ((amount as number) / totalSalesAllDistricts) * 100 : 0,
+                 colorClass: districtColors[idx % districtColors.length]
+               }))
+               .sort((a, b) => b.amount - a.amount)
+               .slice(0, 5); // সেরা ৫টি ডিস্ট্রিক্ট
+
+             setDistrictSales(districtArr);
            }
-        } catch (e) { console.log("Orders KPI calculation failed."); }
+        } catch (e) { console.log("Orders KPI calculation failed.", e); }
 
         // 👉 Fetch Activity Logs
         try {
@@ -221,7 +254,7 @@ export default function TenantDashboardHome() {
              if (logs && logs.length > 0) {
                const formattedLogs = logs.map((log: any, index: number) => ({
                  id: log.id || index,
-                 side: (index % 2 === 0) ? "system" : "user", // সুন্দর দেখানোর জন্য এপাশ-ওপাশ করা
+                 side: (index % 2 === 0) ? "system" : "user",
                  time: new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                  status: log.type ? log.type.split('_').pop() : "ACTION",
                  statusColorClass: "text-emerald-500 dark:text-emerald-400",
@@ -241,13 +274,12 @@ export default function TenantDashboardHome() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [apiUrl]);
 
   // Stock calculations
   const lowStockItemsCount = products.filter((p) => p.stock <= LOW_STOCK_THRESHOLD).length;
   const immediateAttentionItems = products.filter((p) => p.stock === 0);
 
-  // 🚀 ডাইনামিক KPI Data Setup
   const KPI_DATA: KpiCard[] = [
     { id: "sales", label: "Sells Today", value: kpiStats ? formatBDT(kpiStats.salesToday) : "৳ 0", icon: DollarSign, colorClass: "emerald" },
     { id: "orders", label: "Orders Today", value: kpiStats ? kpiStats.ordersToday.toString() : "0", icon: ShoppingBag, colorClass: "blue" },
@@ -257,7 +289,6 @@ export default function TenantDashboardHome() {
     { id: "returns", label: "Return Today", value: "0", icon: RotateCcw, colorClass: "red" },
   ];
 
-  // Fallbacks
   const TEAM_TO_SHOW = teamStats.length > 0 ? teamStats : [
     { id: "1", initial: userInitial, name: userName, role: userRole, tasks: 0 },
   ];
@@ -265,7 +296,6 @@ export default function TenantDashboardHome() {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10 min-h-screen p-6">
       
-      {/* 🚀 নোটিশ ব্যানারটি সবার উপরে থাকবে */}
       <PlatformAnnouncement />
       
       {/* KPI CARDS */}
@@ -298,7 +328,7 @@ export default function TenantDashboardHome() {
                     {index + 1}
                   </span>
                   {item.imageUrl ? (
-                    <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${process.env.NEXT_PUBLIC_API_URL}${item.imageUrl}`} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3" />
+                    <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3" />
                   ) : (
                     <ThumbPlaceholder size="w-full h-28" rounded="rounded-lg mb-3" />
                   )}
@@ -328,7 +358,6 @@ export default function TenantDashboardHome() {
             <span>SYSTEM</span>
           </div>
           
-          {/* 🚀 যদি লগস না থাকে তবে সুন্দর মেসেজ দেখাবে */}
           {activityFeed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
                <Info size={24} className="mb-2 opacity-50" />
@@ -336,7 +365,6 @@ export default function TenantDashboardHome() {
             </div>
           ) : (
             <div className="space-y-6 relative before:absolute before:inset-0 before:mx-auto before:h-full before:w-px before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-white/10 before:to-transparent">
-              {/* 🚀 এখানে .slice(0, 5) যুক্ত করা হয়েছে, যাতে সর্বোচ্চ ৫টি লগ দেখায় */}
               {activityFeed.slice(0, 5).map((entry) => {
                 const textBlock = (
                   <div className="flex flex-col text-[11px]">
@@ -372,12 +400,21 @@ export default function TenantDashboardHome() {
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-white/5">
                 {products.length > 0 ? (
-                  products.map((item) => {
+                  products.slice(0, 5).map((item) => {
                     const status = getStockStatus(item.stock);
                     return (
                       <tr key={item.id}>
+                        {/* 🚀 এখানে প্রোডাক্টের ছবি এড করা হয়েছে */}
                         <td className="py-3 flex items-center gap-3">
-                          <ThumbPlaceholder />
+                          {item.imageUrl ? (
+                            <img 
+                              src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} 
+                              alt={item.name} 
+                              className="w-8 h-8 rounded object-cover border border-gray-100 dark:border-white/10" 
+                            />
+                          ) : (
+                            <ThumbPlaceholder size="w-8 h-8" />
+                          )}
                           <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300">{item.name}</span>
                         </td>
                         <td className="py-3 text-[12px] text-gray-500 dark:text-gray-400">{item.sku}</td>
@@ -403,12 +440,20 @@ export default function TenantDashboardHome() {
           <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-4">Immediate Attention</h3>
           <div className="space-y-4">
             {immediateAttentionItems.length > 0 ? (
-              immediateAttentionItems.map((item) => (
+              immediateAttentionItems.slice(0, 5).map((item) => (
                 <div key={item.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <ThumbPlaceholder size="w-8 h-8" />
+                    {item.imageUrl ? (
+                       <img 
+                         src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} 
+                         alt={item.name} 
+                         className="w-8 h-8 rounded object-cover border border-gray-100 dark:border-white/10" 
+                       />
+                     ) : (
+                       <ThumbPlaceholder size="w-8 h-8" />
+                     )}
                     <div>
-                      <h4 className="text-[12px] font-bold text-slate-800 dark:text-gray-200">{item.name}</h4>
+                      <h4 className="text-[12px] font-bold text-slate-800 dark:text-gray-200 truncate w-32">{item.name}</h4>
                       <p className="text-[10px] font-bold text-red-500 dark:text-red-400">Stock: {item.stock}</p>
                     </div>
                   </div>
@@ -449,10 +494,27 @@ export default function TenantDashboardHome() {
           </div>
         </div>
 
-        {/* TOP DISTRICT SALES (Placeholder) */}
+        {/* 🚀 TOP DISTRICT SALES (Now dynamic) */}
         <div className={`${CARD_CLASS} p-6 lg:col-span-2`}>
           <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-6">Top District Sales</h3>
           <div className="space-y-5">
+            {districtSales.length > 0 ? (
+              districtSales.map((dist, index) => (
+                <div key={dist.id}>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300 truncate pr-2">
+                      {index + 1}. {dist.name}
+                    </span>
+                    <span className="text-[12px] font-bold text-slate-800 dark:text-gray-200 shrink-0">
+                      {formatBDT(dist.amount)}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden" role="progressbar" aria-valuenow={dist.percent} aria-valuemin={0} aria-valuemax={100}>
+                    <div className={`h-full rounded-full ${dist.colorClass}`} style={{ width: `${dist.percent}%` }} />
+                  </div>
+                </div>
+              ))
+            ) : (
               <div>
                 <div className="flex justify-between items-end mb-1">
                   <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300">1. No Sales Data</span>
@@ -462,6 +524,7 @@ export default function TenantDashboardHome() {
                   <div className="h-full bg-gray-300 dark:bg-gray-700 rounded-full" style={{ width: `0%` }} />
                 </div>
               </div>
+            )}
           </div>
         </div>
 

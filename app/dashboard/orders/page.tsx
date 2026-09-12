@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { 
   Search, LayoutGrid, List as ListIcon, 
-  Edit3, Trash2, Truck, Printer, Eye, X, User, Loader2, Image as ImageIcon, RotateCcw
+  Edit3, Trash2, Truck, Printer, Eye, X, User, Loader2, RotateCcw, Box, CheckCircle, CheckCircle2
 } from "lucide-react";
 
 export default function OrdersPage() {
+  const [mounted, setMounted] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null); // 🚀 বুকিং লোডিং স্টেট
+  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null);
+
+  const [isBulkBooking, setIsBulkBooking] = useState(false);
 
   const [activeTab, setActiveTab] = useState("All orders");
   const [activeDateFilter, setActiveDateFilter] = useState("Today");
@@ -39,10 +43,10 @@ export default function OrdersPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     fetchOrders();
   }, []);
 
-  // 🚀 ১. Soft Delete (Move to Trash)
   const handleDeleteOrder = async (id: string) => {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি ট্র্যাশে পাঠাতে চান? স্টক ইনভেন্টরিতে ফিরিয়ে দেওয়া হবে।")) return;
 
@@ -66,7 +70,6 @@ export default function OrdersPage() {
     }
   };
 
-  // 🚀 ২. Restore Order
   const handleRestoreOrder = async (id: string) => {
     if (!window.confirm("অর্ডারটি কি রিস্টোর করতে চান?")) return;
     try {
@@ -88,7 +91,6 @@ export default function OrdersPage() {
     }
   };
 
-  // 🚀 ৩. Permanent Delete
   const handlePermanentDelete = async (id: string) => {
     if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবে না।")) return;
     try {
@@ -110,7 +112,6 @@ export default function OrdersPage() {
     }
   };
 
-  // 🚀 ৪. Steadfast Courier Booking
   const handleBookCourier = async (orderId: string) => {
     if (!window.confirm("আপনি কি এই পার্সেলটি Steadfast-এ বুক করতে চান?")) return;
     
@@ -125,46 +126,154 @@ export default function OrdersPage() {
       const data = await res.json();
       
       if (res.ok) {
-        alert(`✅ সফলভাবে বুকিং হয়েছে! ট্র্যাকিং কোড: ${data.consignment.tracking_code}`);
-        fetchOrders(); // লিস্ট রিফ্রেশ করা হবে
+        alert(`✅ সফলভাবে বুকিং হয়েছে! Consignment ID: ${data.consignment?.consignment_id || data.consignment?.tracking_code}`);
+        fetchOrders(); 
         if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder(null); // ড্রয়ার বন্ধ করে দেওয়া
+          setSelectedOrder(null); 
         }
       } else {
         alert(`❌ বুকিং ব্যর্থ হয়েছে: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Booking error:", error);
-      alert("সার্ভার এরর! বুকিং করা যায়নি।");
+      alert("সার্ভার এরর! বুকিং করা যায়নি।");
     } finally {
       setBookingOrderId(null);
     }
   };
 
+  const handleBulkBookCourier = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    const eligibleOrderIds = selectedOrderIds.filter(id => {
+      const order = orders.find(o => o.id === id);
+      return order && !order.consignmentId && order.status !== 'IN_REVIEW';
+    });
+
+    if (eligibleOrderIds.length === 0) {
+      alert("❌ নির্বাচিত পার্সেলগুলো আগে থেকেই Steadfast-এ বুক করা আছে!");
+      return;
+    }
+
+    if (!window.confirm(`নির্বাচিত ${selectedOrderIds.length} টি অর্ডারের মধ্যে নতুন ${eligibleOrderIds.length} টি পার্সেল Steadfast-এ বুক করতে চান?\n(আগে থেকে বুক করাগুলো স্বয়ংক্রিয়ভাবে বাদ দেওয়া হবে)`)) return;
+
+    setIsBulkBooking(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      const token = localStorage.getItem("access_token");
+
+      await Promise.all(
+        eligibleOrderIds.map(async (orderId) => {
+          try {
+            const res = await fetch(`${apiUrl}/orders/${orderId}/book-steadfast`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) {
+              successCount++;
+            } else {
+              failCount++;
+            }
+          } catch (error) {
+            failCount++;
+          }
+        })
+      );
+
+      alert(`✅ বুল্ক বুকিং সম্পন্ন!\nসফল হয়েছে: ${successCount} টি\nব্যর্থ হয়েছে: ${failCount} টি`);
+      setSelectedOrderIds([]); 
+      fetchOrders(); 
+    } catch (error) {
+      console.error("Bulk booking error:", error);
+      alert("সার্ভার এরর! বুল্ক বুকিং সম্পন্ন করা যায়নি।");
+    } finally {
+      setIsBulkBooking(false);
+    }
+  };
+
+  const handleMarkDelivered = async (orderId: string) => {
+    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি 'Delivered' হিসেবে মার্ক করতে চান?")) return;
+    try {
+      const token = localStorage.getItem("access_token");
+      
+      const res = await fetch(`${apiUrl}/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: "DELIVERED" })
+      });
+      
+      if (res.ok) {
+        alert("✅ অর্ডারটি সফলভাবে Delivered মার্ক করা হয়েছে!");
+        setSelectedOrder(null);
+        fetchOrders(); 
+      } else {
+        const errorData = await res.json();
+        console.error("Backend Error:", errorData);
+        alert(`❌ ব্যাকএন্ড এরর: ${errorData.message || "স্ট্যাটাস আপডেট করা সম্ভব হয়নি"}`);
+      }
+    } catch (error) {
+      console.error("Status update error:", error);
+      alert("সার্ভার এরর! আপডেট করা যায়নি।");
+    }
+  };
+
   const dateFilters = ["Today", "Yesterday", "Last 7", "Last 30", "All time"];
+  const returnStatuses = ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'];
+
+  // 🚀 ফিক্স: কোনো অর্ডার গায়েব হবে না! 
+  const visibleOrders = orders.filter(o => !o.isDeleted);
 
   const tabConfigs = [
-    { label: "All orders", status: "All orders", count: orders.filter(o => !o.isDeleted).length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
-    { label: "New orders", status: "PENDING", count: orders.filter(o => !o.isDeleted && o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
-    { label: "Review", status: "PROCESSING", count: orders.filter(o => !o.isDeleted && o.status === 'PROCESSING').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
-    { label: "Packed", status: "PACKED", count: orders.filter(o => !o.isDeleted && o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
-    { label: "Pending", status: "COURIER_PENDING", count: orders.filter(o => !o.isDeleted && o.status === 'COURIER_PENDING').length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
-    { label: "Delivered", status: "DELIVERED", count: orders.filter(o => !o.isDeleted && o.status === 'DELIVERED').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
-    { label: "Cancel", status: "CANCELLED", count: orders.filter(o => !o.isDeleted && o.status === 'CANCELLED').length, colorClass: "text-red-500 dark:text-red-400", borderClass: "border-red-200 dark:border-red-400/30", bgClass: "bg-red-50 dark:bg-red-500/10", ringClass: "ring-red-500" },
+    { label: "All orders", status: "All orders", count: visibleOrders.length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
+    { label: "New orders", status: "PENDING", count: visibleOrders.filter(o => o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
+    { label: "Review", status: "IN_REVIEW", count: visibleOrders.filter(o => o.status === 'IN_REVIEW').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
+    { label: "Packed", status: "PACKED", count: visibleOrders.filter(o => o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
+    
+    // 🚀 ফিক্স: কুরিয়ারে থাকা পার্সেল + ক্যান্সেল হয়েছে কিন্তু এখনো রিস্টক হয়নি এমন সব পার্সেল এখানেই থাকবে
+    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
+    
+    { label: "Delivered", status: "DELIVERED", count: visibleOrders.filter(o => o.status === 'DELIVERED').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
+    
+    // 🚀 ফিক্স: শুধুমাত্র রিস্টক (এক্সেপ্ট) হওয়া রিটার্নগুলোই Cancel ট্যাবে আসবে
+    { label: "Cancel", status: "RETURNED_CANCELLED", count: visibleOrders.filter(o => returnStatuses.includes(o.status?.toUpperCase()) && o.isRestocked).length, colorClass: "text-red-500 dark:text-red-400", borderClass: "border-red-200 dark:border-red-400/30", bgClass: "bg-red-50 dark:bg-red-500/10", ringClass: "ring-red-500" },
+    
     { label: "Trash", status: "TRASH", count: orders.filter(o => o.isDeleted).length, colorClass: "text-gray-500 dark:text-gray-400", borderClass: "border-gray-200 dark:border-gray-500/30", bgClass: "bg-gray-50 dark:bg-gray-500/10", ringClass: "ring-gray-400" },
   ];
 
   const filteredOrders = orders.filter(order => {
+    // 🚀 Trash tab logic handle
     if (activeTab === "Trash") {
-      return order.isDeleted;
+      if (!order.isDeleted) return false;
+    } else {
+      if (order.isDeleted) return false;
     }
 
-    const matchesTab = activeTab === "All orders" || order.status === tabConfigs.find(t => t.label === activeTab)?.status;
+    let matchesTab = false;
+    
+    if (activeTab === "All orders" || activeTab === "Trash") {
+      matchesTab = true;
+    } else if (activeTab === "Cancel") {
+      // 🚀 শুধুমাত্র রিস্টক হওয়া রিটার্নগুলো Cancel ট্যাবে দেখাবে
+      matchesTab = returnStatuses.includes(order.status?.toUpperCase()) && order.isRestocked;
+    } else if (activeTab === "Pending") {
+      // 🚀 কুরিয়ারে থাকা এবং রিটার্ন হয়ে হাতে না আসা পার্সেলগুলো Pending এ থাকবে
+      matchesTab = order.status === "COURIER_PENDING" || (returnStatuses.includes(order.status?.toUpperCase()) && !order.isRestocked);
+    } else {
+      matchesTab = order.status === tabConfigs.find(t => t.label === activeTab)?.status;
+    }
+
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
       order.orderNo.toLowerCase().includes(searchLower) ||
       order.customer?.name.toLowerCase().includes(searchLower) ||
-      order.customer?.phone.toLowerCase().includes(searchLower);
+      order.customer?.phone.toLowerCase().includes(searchLower) ||
+      (order.consignmentId && String(order.consignmentId).toLowerCase().includes(searchLower)) ||
+      (order.trackingCode && String(order.trackingCode).toLowerCase().includes(searchLower));
 
     const orderDate = new Date(order.createdAt);
     const today = new Date();
@@ -186,12 +295,14 @@ export default function OrdersPage() {
       matchesDate = orderDate >= last30;
     }
 
-    return !order.isDeleted && matchesTab && matchesSearch && matchesDate;
+    return matchesTab && matchesSearch && matchesDate;
   });
+
+  const eligibleOrdersForBulk = filteredOrders.filter(o => !o.consignmentId && o.status !== 'IN_REVIEW' && !o.isDeleted);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedOrderIds(filteredOrders.map(order => order.id));
+      setSelectedOrderIds(eligibleOrdersForBulk.map(order => order.id));
     } else {
       setSelectedOrderIds([]);
     }
@@ -304,7 +415,7 @@ export default function OrdersPage() {
             <input
               type="checkbox"
               className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer"
-              checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+              checked={eligibleOrdersForBulk.length > 0 && selectedOrderIds.length === eligibleOrdersForBulk.length}
               onChange={handleSelectAll}
             />
             <span className="text-sm font-bold text-slate-700 dark:text-gray-200">
@@ -314,14 +425,16 @@ export default function OrdersPage() {
 
           {selectedOrderIds.length > 0 && (
             <div className="flex items-center gap-2 animate-in fade-in duration-200">
-              <button className="text-xs font-bold px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-gray-200 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition">
-               Booking 
-              </button>
-              <button className="text-xs font-bold px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-gray-200 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition">
-                Print Invoice
-              </button>
-              <button className="text-xs font-bold px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-sm">
-                Update Status
+              <button 
+                onClick={handleBulkBookCourier}
+                disabled={isBulkBooking}
+                className="text-xs font-bold px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isBulkBooking ? (
+                  <><Loader2 size={14} className="animate-spin" /> Booking...</>
+                ) : (
+                  <><Truck size={14} /> Book Selected ({selectedOrderIds.length})</>
+                )}
               </button>
             </div>
           )}
@@ -352,6 +465,9 @@ export default function OrdersPage() {
               }
 
               const dueAmount = Math.max(0, order.totalAmount - (order.advance || 0));
+              const isAlreadyBooked = !!order.consignmentId || order.status === 'IN_REVIEW';
+              
+              const isModifiable = ['PENDING', 'IN_REVIEW'].includes(order.status?.toUpperCase());
 
               return (
                 <div key={order.id} className={`bg-white dark:bg-[#1a2421] rounded-xl border flex flex-col hover:shadow-md dark:hover:shadow-none dark:hover:border-white/10 transition-all ${order.isDeleted ? 'opacity-75 grayscale-[20%]' : ''} ${selectedOrderIds.includes(order.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
@@ -362,18 +478,39 @@ export default function OrdersPage() {
                       <div className="flex items-start gap-3">
                         <input 
                           type="checkbox" 
-                          className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer" 
+                          className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
                           checked={selectedOrderIds.includes(order.id)}
                           onChange={() => handleSelectOrder(order.id)}
+                          disabled={isAlreadyBooked} 
+                          title={isAlreadyBooked ? "Already Booked" : "Select Order"}
                         />
                         <div>
                           <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">{order.orderNo}</h3>
+                          
+                          {order.consignmentId && (
+                            <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
+                              <Box size={10} /> CN: {order.consignmentId}
+                            </p>
+                          )}
+
                           <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase mt-0.5">{formatDate(order.createdAt)}</p>
+                          
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
+                            <User size={10}/> Entry by: <span className="font-bold text-slate-600 dark:text-gray-300">{order.user?.name || "Admin"}</span>
+                          </p>
                         </div>
                       </div>
-                      <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
-                        {order.status === 'PENDING' ? 'NEW ORDERS' : order.status}
-                      </span>
+                      
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
+                          {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status}
+                        </span>
+                        {order.isRestocked && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10" title="This order has been restocked to inventory">
+                            <CheckCircle2 size={10} /> RESTOCKED
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -414,31 +551,31 @@ export default function OrdersPage() {
                       
                       {!order.isDeleted ? (
                         <>
-                          <Link href={`/dashboard/orders/${order.id}/edit`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                            <Edit3 size={15} />
-                          </Link>
-                          {/* 🚀 মুভ টু ট্র্যাশ */}
-                          <button onClick={() => handleDeleteOrder(order.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer" title="Move to Trash">
-                            <Trash2 size={15} />
-                          </button>
+                          {isModifiable && (
+                            <>
+                              <Link href={`/dashboard/orders/${order.id}/edit`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Edit Order">
+                                <Edit3 size={15} />
+                              </Link>
+                              <button onClick={() => handleDeleteOrder(order.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer" title="Move to Trash">
+                                <Trash2 size={15} />
+                              </button>
+                              <button 
+                                onClick={() => handleBookCourier(order.id)} 
+                                disabled={bookingOrderId === order.id || isAlreadyBooked} 
+                                className={`transition-colors ${bookingOrderId === order.id || isAlreadyBooked ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:text-emerald-600 dark:hover:text-emerald-400'}`} 
+                                title={isAlreadyBooked ? "Already Booked" : "Book to Steadfast"}
+                              >
+                                {bookingOrderId === order.id ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
+                              </button>
+                            </>
+                          )}
                           
-                          {/* 🚀 Book Courier Icon Button */}
-                          <button 
-                            onClick={() => handleBookCourier(order.id)} 
-                            disabled={bookingOrderId === order.id}
-                            className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors disabled:opacity-50" 
-                            title="Book to Steadfast"
-                          >
-                            {bookingOrderId === order.id ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
-                          </button>
-
-                          <Link href={`/dashboard/orders/${order.id}/invoice`} target="_blank" className="hover:text-slate-700 dark:hover:text-gray-300 transition-colors">
+                          <Link href={`/dashboard/orders/${order.id}/invoice`} target="_blank" className="hover:text-slate-700 dark:hover:text-gray-300 transition-colors" title="Print Invoice">
                             <Printer size={15} />
                           </Link>
                         </>
                       ) : (
                         <>
-                          {/* 🚀 ট্র্যাশ ট্যাবে থাকলে রিস্টোর এবং পার্মানেন্ট ডিলিট বাটন দেখাবে */}
                           <button onClick={() => handleRestoreOrder(order.id)} className="text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer" title="Restore Order">
                             <RotateCcw size={16} />
                           </button>
@@ -457,27 +594,42 @@ export default function OrdersPage() {
       </div>
 
       {/* ================= RIGHT DRAWER (Order Details) ================= */}
-      {selectedOrder && (
+      {selectedOrder && mounted && createPortal(
         <>
           <div 
-            className="fixed inset-0 bg-slate-900/20 dark:bg-black/40 backdrop-blur-sm z-40 transition-opacity"
+            className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[99998] transition-opacity"
             onClick={() => setSelectedOrder(null)}
           />
           
-          <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-[#1a2421] shadow-2xl z-50 flex flex-col transform transition-transform duration-300">
+          <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-[#1a2421] shadow-2xl z-[99999] flex flex-col transform transition-transform duration-300">
             
             {/* Drawer Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start">
+            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start bg-slate-50 dark:bg-[#141d1a]">
               <div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white">Order {selectedOrder.orderNo}</h2>
+                
+                {selectedOrder.consignmentId && (
+                  <p className="text-[13px] font-bold text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1.5">
+                    <Box size={14} /> CN: {selectedOrder.consignmentId}
+                  </p>
+                )}
+
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(selectedOrder.createdAt)}</p>
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1"><User size={12}/> Entry by: <span className="font-bold text-slate-700 dark:text-gray-300">{selectedOrder.user?.name || "Admin"}</span></p>
               </div>
-              <div className="flex flex-col items-end gap-3">
+              <div className="flex flex-col items-end gap-2.5">
                 <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"><X size={20} /></button>
-                <span className="text-[10px] font-bold px-3 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded-full uppercase bg-teal-50 dark:bg-teal-500/10">
-                  {selectedOrder.status === 'PENDING' ? 'NEW ORDERS' : selectedOrder.status}
-                </span>
+                
+                <div className="flex flex-col items-end gap-1.5 mt-1">
+                  <span className="text-[10px] font-bold px-3 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded-full uppercase bg-white dark:bg-teal-500/10 shadow-sm">
+                    {selectedOrder.status === 'PENDING' ? 'NEW ORDERS' : selectedOrder.status === 'IN_REVIEW' ? 'IN REVIEW' : selectedOrder.status}
+                  </span>
+                  {selectedOrder.isRestocked && (
+                    <span className="text-[9px] font-bold px-2 py-1 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full uppercase bg-emerald-50 dark:bg-emerald-500/10 shadow-sm flex items-center gap-1">
+                      <CheckCircle2 size={10} /> RESTOCKED
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -544,54 +696,69 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Drawer Footer Buttons - 🚀 Conditional for normal vs deleted orders */}
-            <div className="p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-3 transition-colors">
-              {!selectedOrder.isDeleted ? (
-                <>
-                  <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                    <Trash2 size={14}/> Move to Trash
-                  </button>
-                  <button className="py-2.5 rounded-lg border border-emerald-500/50 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors">
-                    Mark Delivered
-                  </button>
-                  <Link 
-                    href={`/dashboard/orders/${selectedOrder.id}/invoice`} 
-                    target="_blank"
-                    className="py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                  >
-                    Print Slip
-                  </Link>
-                  
-                  {/* 🚀 Book Courier Button for Drawer */}
-                  <button 
-                    onClick={() => handleBookCourier(selectedOrder.id)}
-                    disabled={bookingOrderId === selectedOrder.id}
-                    className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
-                  >
-                    {bookingOrderId === selectedOrder.id ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" /> Booking...
-                      </>
-                    ) : (
-                      <>
-                        <Truck size={14}/> Book Courier
-                      </>
-                    )}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => handlePermanentDelete(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                    <Trash2 size={16}/> Delete Forever
-                  </button>
-                  <button onClick={() => handleRestoreOrder(selectedOrder.id)} className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm">
-                    <RotateCcw size={16}/> Restore Order
-                  </button>
-                </>
-              )}
-            </div>
+            {/* Drawer Footer Buttons */}
+            {(() => {
+              const isSelectedModifiable = ['PENDING', 'IN_REVIEW'].includes(selectedOrder.status?.toUpperCase());
+              
+              return (
+                <div className={`p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid ${!selectedOrder.isDeleted && !isSelectedModifiable ? 'grid-cols-1' : 'grid-cols-2'} gap-3 transition-colors`}>
+                  {!selectedOrder.isDeleted ? (
+                    <>
+                      {isSelectedModifiable && (
+                        <>
+                          <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                            <Trash2 size={14}/> Move to Trash
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleMarkDelivered(selectedOrder.id)}
+                            className="py-2.5 rounded-lg border border-emerald-500/50 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+                          >
+                            Mark Delivered
+                          </button>
+                        </>
+                      )}
+
+                      <Link 
+                        href={`/dashboard/orders/${selectedOrder.id}/invoice`} 
+                        target="_blank"
+                        className="py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                      >
+                        <Printer size={14}/> Print Slip
+                      </Link>
+                      
+                      {isSelectedModifiable && (
+                        <button 
+                          onClick={() => handleBookCourier(selectedOrder.id)}
+                          disabled={bookingOrderId === selectedOrder.id || !!selectedOrder.consignmentId} 
+                          className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {bookingOrderId === selectedOrder.id ? (
+                            <><Loader2 size={14} className="animate-spin" /> Booking...</>
+                          ) : !!selectedOrder.consignmentId ? (
+                            "Already Booked"
+                          ) : (
+                            <><Truck size={14}/> Book Courier</>
+                          )}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => handlePermanentDelete(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                        <Trash2 size={16}/> Delete Forever
+                      </button>
+                      <button onClick={() => handleRestoreOrder(selectedOrder.id)} className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm">
+                        <RotateCcw size={16}/> Restore Order
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
-        </>
+        </>,
+        document.body
       )}
 
     </div>

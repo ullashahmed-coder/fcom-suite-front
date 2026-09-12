@@ -10,19 +10,27 @@ import {
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("shipping"); 
+  const [activeTab, setActiveTab] = useState("general"); 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
-  // ডাইনামিক সেটিংস স্টেট
+  const [backupOptions, setBackupOptions] = useState({
+    orders: true,
+    products: true,
+    customers: true
+  });
+  const [isGeneratingBackup, setIsGeneratingBackup] = useState(false);
+
+  // 🚀 ফিক্স: ডামি ডেটা সরিয়ে ফাঁকা করে দেওয়া হয়েছে
   const [settings, setSettings] = useState({
     shopId: "", 
-    storeName: "Deshio Tati",
+    storeName: "",
     currency: "BDT",
-    supportEmail: "support@deshiotati.com",
-    supportPhone: "01326938147",
-    address: "Rampur Bazar, Kalihati, Tangail",
+    supportEmail: "",
+    supportPhone: "",
+    address: "",
     logoUrl: "", 
     steadfastActive: true,
     steadfastApiKey: "",
@@ -34,7 +42,7 @@ export default function SettingsPage() {
     bkashAppSecret: "",
     smsActive: true,
     smsApiKey: "",
-    smsSenderId: "DESHIOTATI",
+    smsSenderId: "",
     autoBackup: true,
     twoFactorAuth: true,
   });
@@ -49,18 +57,21 @@ export default function SettingsPage() {
     try {
       const token = localStorage.getItem("access_token") || localStorage.getItem("token");
       const res = await fetch(`${apiUrl}/settings`, {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { "Authorization": `Bearer ${token}` },
+        cache: "no-store" 
       });
+      
       if (res.ok) {
         const data = await res.json();
         
-        // null ভ্যালুগুলোকে খালি স্ট্রিং ("") এ কনভার্ট করা
+        const fetchedLogo = data.logoUrl || data.storeLogo || data.logo || "";
+
         const sanitizedData = Object.keys(data).reduce((acc: any, key) => {
           acc[key] = data[key] === null ? "" : data[key];
           return acc;
         }, {});
 
-        setSettings(prev => ({ ...prev, ...sanitizedData }));
+        setSettings(prev => ({ ...prev, ...sanitizedData, logoUrl: fetchedLogo }));
       }
     } catch (error) {
       console.error("Failed to fetch settings:", error);
@@ -69,38 +80,80 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveAll = async () => {
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+      alert("অনুগ্রহ করে শুধুমাত্র .zip ব্যাকআপ ফাইল আপলোড করুন।");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsImporting(true);
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/settings/import-backup`, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${token}` },
+        body: formData 
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ ডাটা সফলভাবে রিস্টোর করা হয়েছে!");
+      } else {
+        alert("❌ " + data.message);
+      }
+    } catch (error) {
+      console.error("Import Error:", error);
+      alert("সার্ভার এরর! ফাইল আপলোড করা যায়নি।");
+    } finally {
+      setIsImporting(false);
+      e.target.value = ""; 
+    }
+  };
+
+  const handleSaveAll = async (settingsToSave = settings, showFeedback = true) => {
     setIsSaving(true);
     try {
       const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      
+      const payload = {
+        ...settingsToSave,
+        storeLogo: settingsToSave.logoUrl,
+        logo: settingsToSave.logoUrl
+      };
+
       const res = await fetch(`${apiUrl}/settings`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        // 🚀 ১. LocalStorage এ শপের নতুন নাম আপডেট করা
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const userObj = JSON.parse(storedUser);
-          userObj.shopName = settings.storeName; // সেটিংসে দেওয়া নতুন নাম বসানো
+          userObj.shopName = settingsToSave.storeName; 
           localStorage.setItem("user", JSON.stringify(userObj));
         }
 
-        alert("✅ সব সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে!");
-        
-        // 🚀 ২. পেজ রিলোড করে সাইডবারে লাইভ আপডেট দেখানো
-        window.location.reload(); 
+        if (showFeedback) {
+          alert("✅ সব সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে!");
+          window.location.reload(); 
+        }
       } else {
-        alert("❌ সেটিংস সেভ করা সম্ভব হয়নি।");
+        if (showFeedback) alert("❌ সেটিংস সেভ করা সম্ভব হয়নি।");
       }
     } catch (error) {
       console.error("Save error:", error);
-      alert("সার্ভার এরর!");
+      if (showFeedback) alert("সার্ভার এরর!");
     } finally {
       setIsSaving(false);
     }
@@ -116,6 +169,7 @@ export default function SettingsPage() {
     setUploadingLogo(true);
     try {
       const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      
       const res = await fetch(`${apiUrl}/uploads/image`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
@@ -124,15 +178,61 @@ export default function SettingsPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setSettings(prev => ({ ...prev, logoUrl: data.imageUrl }));
+        const newLogoUrl = data.imageUrl || data.url || data.path || "";
+        
+        const updatedSettings = { ...settings, logoUrl: newLogoUrl };
+        setSettings(updatedSettings);
+
+        await handleSaveAll(updatedSettings, false);
+        alert("✅ লোগো সফলভাবে আপলোড এবং সেভ হয়েছে!");
+
       } else {
-        alert("❌ লোগো আপলোড করা যায়নি।");
+        alert("❌ লোগো সার্ভারে আপলোড করা যায়নি।");
       }
     } catch (err) {
       console.error(err);
       alert("সার্ভার এরর!");
     } finally {
       setUploadingLogo(false);
+      e.target.value = ""; 
+    }
+  };
+
+  const handleGenerateBackup = async () => {
+    if (!backupOptions.orders && !backupOptions.products && !backupOptions.customers) {
+      alert("অনুগ্রহ করে অন্তত একটি ডাটা টাইপ সিলেক্ট করুন!");
+      return;
+    }
+
+    setIsGeneratingBackup(true);
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/settings/export-backup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(backupOptions)
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `Shop_Backup_${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        alert("❌ Backup generation failed!");
+      }
+    } catch (error) {
+      console.error("Backup Error:", error);
+      alert("Server error!");
+    } finally {
+      setIsGeneratingBackup(false);
     }
   };
 
@@ -165,7 +265,7 @@ export default function SettingsPage() {
         </div>
         
         <button 
-          onClick={handleSaveAll}
+          onClick={() => handleSaveAll(settings, true)}
           disabled={isSaving}
           className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors disabled:opacity-50"
         >
@@ -207,7 +307,7 @@ export default function SettingsPage() {
 
         <div className="lg:col-span-8 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors overflow-hidden">
           
-          {/* ----- 1. GENERAL & BRANDING ----- */}
+{/* ----- 1. GENERAL & BRANDING ----- */}
           {activeTab === "general" && (
             <div>
               <div className="p-6 border-b border-gray-100 dark:border-white/10">
@@ -245,7 +345,7 @@ export default function SettingsPage() {
                     <label className="block text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Store Name</label>
                     <div className="relative">
                       <Store className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                      <input type="text" value={settings.storeName} onChange={(e) => setSettings({...settings, storeName: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                      <input type="text" value={settings.storeName} onChange={(e) => setSettings({...settings, storeName: e.target.value})} placeholder="e.g. My Shop" className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
                     </div>
                   </div>
                   <div>
@@ -262,14 +362,14 @@ export default function SettingsPage() {
                     <label className="block text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Support Email</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                      <input type="email" value={settings.supportEmail} onChange={(e) => setSettings({...settings, supportEmail: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                      <input type="email" value={settings.supportEmail} onChange={(e) => setSettings({...settings, supportEmail: e.target.value})} placeholder="e.g. support@myshop.com" className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Support Phone</label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                      <input type="text" value={settings.supportPhone} onChange={(e) => setSettings({...settings, supportPhone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                      <input type="text" value={settings.supportPhone} onChange={(e) => setSettings({...settings, supportPhone: e.target.value})} placeholder="e.g. 01XXXXXXXXX" className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
                     </div>
                   </div>
                 </div>
@@ -278,9 +378,58 @@ export default function SettingsPage() {
                   <label className="block text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Business Address</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-3 text-gray-400" size={16} />
-                    <textarea rows={3} value={settings.address} onChange={(e) => setSettings({...settings, address: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none"></textarea>
+                    <textarea rows={3} value={settings.address} onChange={(e) => setSettings({...settings, address: e.target.value})} placeholder="Enter full business address" className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none"></textarea>
                   </div>
                 </div>
+
+                {/* 🚀 Delivery Charges Settings */}
+                <div className="mt-8 border-t border-gray-100 dark:border-white/5 pt-6">
+                  <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-4">Delivery Charges</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Inside Dhaka (৳)</label>
+                      <input 
+                        type="number" 
+                        value={settings.insideDhakaCharge || ""} 
+                        onChange={(e) => setSettings({...settings, insideDhakaCharge: Number(e.target.value)})}
+                        className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Outside Dhaka (৳)</label>
+                      <input 
+                        type="number" 
+                        value={settings.outsideDhakaCharge || ""} 
+                        onChange={(e) => setSettings({...settings, outsideDhakaCharge: Number(e.target.value)})}
+                        className="w-full mt-1.5 px-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Sub-city / Local Area (৳)</label>
+                      <div className="flex gap-2 mt-1.5">
+                        <input 
+                          type="text" 
+                          placeholder="Area Name"
+                          value={settings.subCityName || ""} 
+                          onChange={(e) => setSettings({...settings, subCityName: e.target.value})}
+                          className="w-1/2 px-3 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none"
+                        />
+                        <input 
+                          type="number" 
+                          placeholder="Charge"
+                          value={settings.subCityCharge || ""} 
+                          onChange={(e) => setSettings({...settings, subCityCharge: Number(e.target.value)})}
+                          className="w-1/2 px-3 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                
               </div>
             </div>
           )}
@@ -295,7 +444,7 @@ export default function SettingsPage() {
               
               <div className="p-6 space-y-6">
                 
-                {/* 🚀 Steadfast Box */}
+                {/* Steadfast Box */}
                 <div className="border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 rounded-2xl p-5">
                   <div className="flex items-center justify-between mb-4">
                      <div className="flex items-center gap-3">
@@ -337,7 +486,7 @@ export default function SettingsPage() {
                      </div>
                   </div>
 
-                  {/* 🚀 Dynamic Webhook URL Section */}
+                  {/* Dynamic Webhook URL Section */}
                   <div className="pt-5 mt-5 border-t border-emerald-100 dark:border-emerald-500/10">
                     <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
                       Your Steadfast Webhook URL
@@ -522,23 +671,47 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-[13px] font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-3">Manual Data Export</h3>
                   <div className="border border-gray-200 dark:border-white/10 rounded-xl p-5 bg-gray-50/50 dark:bg-[#141d1a]">
+                     
                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-gray-300 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg cursor-pointer">
-                          <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600" /> Orders
+                          <input type="checkbox" checked={backupOptions.orders} onChange={(e) => setBackupOptions({...backupOptions, orders: e.target.checked})} className="w-4 h-4 text-emerald-600" /> Orders
                        </label>
                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-gray-300 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg cursor-pointer">
-                          <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600" /> Products
+                          <input type="checkbox" checked={backupOptions.products} onChange={(e) => setBackupOptions({...backupOptions, products: e.target.checked})} className="w-4 h-4 text-emerald-600" /> Products
                        </label>
                        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-gray-300 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg cursor-pointer">
-                          <input type="checkbox" defaultChecked className="w-4 h-4 text-emerald-600" /> Customers
+                          <input type="checkbox" checked={backupOptions.customers} onChange={(e) => setBackupOptions({...backupOptions, customers: e.target.checked})} className="w-4 h-4 text-emerald-600" /> Customers
                        </label>
-                       <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-gray-300 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg cursor-pointer">
-                          <input type="checkbox" className="w-4 h-4 text-emerald-600" /> Settings
+                       <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-gray-300 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg opacity-50 cursor-not-allowed">
+                          <input type="checkbox" disabled className="w-4 h-4 text-emerald-600" /> Settings
                        </label>
                      </div>
-                     <button className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-2.5 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-bold shadow-md hover:bg-slate-700 dark:hover:bg-gray-100 transition-colors cursor-pointer">
-                        <DownloadCloud size={18} /> Generate New Backup (.ZIP)
+                     
+                     <button 
+                        onClick={handleGenerateBackup}
+                        disabled={isGeneratingBackup || (!backupOptions.orders && !backupOptions.products && !backupOptions.customers)}
+                        className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-2.5 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-bold shadow-md hover:bg-slate-700 dark:hover:bg-gray-100 transition-colors cursor-pointer disabled:opacity-50"
+                     >
+                        {isGeneratingBackup ? <Loader2 size={18} className="animate-spin" /> : <DownloadCloud size={18} />} 
+                        {isGeneratingBackup ? "Generating ZIP..." : "Generate New Backup (.ZIP)"}
                      </button>
+                     
+                     <div className="mt-6 pt-6 border-t border-gray-200 dark:border-white/10">
+                        <h3 className="text-[13px] font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-3">Restore Backup</h3>
+                        <p className="text-[12px] text-gray-500 mb-4">Upload a previously generated .ZIP file to restore your store data.</p>
+                        
+                        <label className={`flex items-center justify-center gap-2 w-full md:w-auto max-w-xs px-6 py-2.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg text-sm font-bold shadow-sm hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors cursor-pointer ${isImporting ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {isImporting ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />} 
+                          {isImporting ? "Restoring Data..." : "Upload .ZIP Backup"}
+                          <input 
+                            type="file" 
+                            accept=".zip" 
+                            className="hidden" 
+                            onChange={handleImportBackup} 
+                            disabled={isImporting}
+                          />
+                        </label>
+                     </div>
                   </div>
                 </div>
               </div>
@@ -592,9 +765,12 @@ export default function SettingsPage() {
                       <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${settings.twoFactorAuth ? 'translate-x-5' : 'translate-x-0'}`}></div>
                    </div>
                 </div>
+
+                
               </div>
             </div>
           )}
+
 
         </div>
       </div>

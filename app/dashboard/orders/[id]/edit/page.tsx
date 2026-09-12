@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   Search, Plus, Trash2, ShoppingBag, User, MapPin, Phone, 
   Loader2, Package, ArrowLeft, Receipt, Truck, Zap, Tag, CheckCircle2, AlertCircle, Save, 
-  Edit3
+  Edit3, AlertTriangle, ClipboardEdit // 🚀 ফিক্স: ClipboardEdit ইমপোর্ট করা হয়েছে
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
@@ -26,6 +26,12 @@ export default function EditOrderPage() {
   const [steadfastNote, setSteadfastNote] = useState("");
   const [isResellerOrder, setIsResellerOrder] = useState(false);
   const [orderNo, setOrderNo] = useState("");
+  
+  const [orderStatus, setOrderStatus] = useState("");
+  const [trackingCode, setTrackingCode] = useState("");
+  
+  // 🚀 Steadfast Warning Modal State
+  const [showSteadfastWarning, setShowSteadfastWarning] = useState(false);
 
   const [customer, setCustomer] = useState({
     phone: "",
@@ -108,6 +114,8 @@ export default function EditOrderPage() {
         setIsResellerOrder(orderData.customer?.isReseller || false);
         setDiscount(orderData.discount || "");
         setSteadfastNote(orderData.courierNote || "");
+        setOrderStatus(orderData.status || "");
+        setTrackingCode(orderData.trackingCode || "");
         
         if (displayDistrict === "Custom") {
           setCustomDeliveryCharge(orderData.deliveryCharge);
@@ -200,7 +208,7 @@ export default function EditOrderPage() {
   const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isSaving) return; // 🚀 ডাবল ক্লিক প্রিভেন্ট করার জন্য
+    if (isSaving) return;
 
     if (!isPhoneValid) { alert("দয়া করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন।"); return; }
     if (!customer.name || !customer.district) { alert("দয়া করে কাস্টমারের নাম এবং জেলা সিলেক্ট করুন।"); return; }
@@ -239,8 +247,12 @@ export default function EditOrderPage() {
       });
 
       if (response.ok) {
-        alert("✅ অর্ডারটি সফলভাবে আপডেট হয়েছে।");
-        router.push("/dashboard/orders");
+        if (orderStatus === 'IN_REVIEW' || trackingCode) {
+          setShowSteadfastWarning(true);
+        } else {
+          alert("✅ অর্ডারটি সফলভাবে আপডেট হয়েছে।");
+          router.push("/dashboard/orders");
+        }
       } else {
         const errData = await response.json();
         alert(`❌ অর্ডার আপডেট হয়নি! ${errData.message || ''}`);
@@ -266,13 +278,13 @@ export default function EditOrderPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10 max-w-[1400px] mx-auto transition-colors">
+    <div className="space-y-6 pb-10 max-w-[1400px] mx-auto transition-colors relative">
 
       {/* ================= Page Header ================= */}
       <div className="flex items-center gap-4 pb-4 border-b border-slate-200 dark:border-white/5">
         <button
           onClick={() => router.back()}
-          className="p-2.5 bg-white dark:bg-[#1a2421] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl transition-all shadow-sm"
+          className="p-2.5 bg-white dark:bg-[#1a2421] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl transition-all shadow-sm cursor-pointer"
         >
           <ArrowLeft size={20} />
         </button>
@@ -332,7 +344,6 @@ export default function EditOrderPage() {
                       <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-white/5">
                         <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-gray-100">৳ {product.price}</span>
                         
-                        {/* 🚀 স্টক কাউন্ট দেখানোর কোড */}
                         <div className="flex items-center gap-1 sm:gap-2">
                           <span className={`text-[8px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded ${availableNow > 0 ? 'text-green-600 dark:text-emerald-400 bg-green-50 dark:bg-emerald-500/10' : 'text-red-600 dark:text-rose-400 bg-red-50 dark:bg-rose-500/10'}`}>
                             {availableNow > 0 ? `${availableNow} In Stock` : 'Out'}
@@ -340,7 +351,7 @@ export default function EditOrderPage() {
                           <button
                             type="button"
                             onClick={() => addToCart(product)}
-                            className="w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center transition-colors shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center transition-colors shrink-0 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                           >
                             <Plus size={14} className="sm:w-[16px] sm:h-[16px]" />
                           </button>
@@ -390,8 +401,8 @@ export default function EditOrderPage() {
                           className="w-14 text-center py-1 text-sm outline-none font-bold text-slate-800 dark:text-white bg-transparent"
                         />
                       </div>
-                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400 w-16 text-right">৳ {Number(item.price) * item.qty}</span>
-                      <button type="button" onClick={() => removeFromCart(item.id)} className="text-slate-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-1.5 bg-white dark:bg-white/5 rounded border border-slate-200 dark:border-transparent transition-colors"><Trash2 size={16} /></button>
+                      <span className="text-sm font-bold text-[#7A1B38] dark:text-rose-400 w-16 text-right">৳ {Number(item.price) * item.qty}</span>
+                      <button type="button" onClick={() => removeFromCart(item.id)} className="text-slate-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-1.5 bg-white dark:bg-white/5 rounded border border-slate-200 dark:border-transparent transition-colors cursor-pointer"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 ))}
@@ -424,6 +435,11 @@ export default function EditOrderPage() {
                       }`}
                   />
                 </div>
+                {customer.phone.length > 0 && !isPhoneValid && (
+                  <p className="text-[10px] text-rose-500 dark:text-rose-400 font-bold flex items-center gap-1 mt-1">
+                    <AlertCircle size={10} /> ফোন নম্বর অবশ্যই ১১ ডিজিটের হতে হবে এবং 01 দিয়ে শুরু হতে হবে।
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -484,6 +500,7 @@ export default function EditOrderPage() {
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
                   className="w-full p-3 bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white border border-slate-200 dark:border-white/5 rounded-lg text-sm focus:border-blue-600 outline-none resize-none"
+                  placeholder="Full address for delivery..."
                 ></textarea>
               </div>
 
@@ -517,6 +534,54 @@ export default function EditOrderPage() {
                     />
                   </div>
                 </div>
+
+                <div className="flex flex-col justify-center pt-5">
+                  <label className="flex items-center gap-2 text-xs font-bold text-rose-600 dark:text-rose-400 cursor-pointer p-2 border border-rose-100 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={customer.isFullPaid}
+                      onChange={(e) => setCustomer({ ...customer, isFullPaid: e.target.checked })}
+                      className="accent-rose-600 dark:accent-rose-500 w-4 h-4 rounded cursor-pointer"
+                    />
+                    <div className="flex items-center gap-1">
+                      <Zap size={14} className="fill-rose-600 dark:fill-rose-500" /> Make Urgent
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5 transition-colors">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-600 dark:text-gray-300 flex items-center gap-1">
+                    <ClipboardEdit size={14} className="text-amber-600 dark:text-amber-500" />
+                    Special Note (Only for Packing Team)
+                  </label>
+                  <button type="button" onClick={() => setCustomer({ ...customer, note: "" })} className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300">Clear</button>
+                </div>
+                <textarea
+                  rows={2}
+                  value={customer.note}
+                  onChange={(e) => setCustomer({ ...customer, note: e.target.value })}
+                  className="w-full p-3 bg-amber-50/50 dark:bg-amber-500/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-amber-200 dark:border-amber-500/30 rounded-lg text-sm focus:border-amber-500 outline-none resize-none transition-colors"
+                  placeholder="e.g. গিফট নোট যাবে..."
+                ></textarea>
+              </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5 transition-colors">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                    <Truck size={14} />
+                    Steadfast Courier Note
+                  </label>
+                  <button type="button" onClick={() => setSteadfastNote("")} className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300">Clear</button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={steadfastNote}
+                  onChange={(e) => setSteadfastNote(e.target.value)}
+                  className="w-full p-3 bg-indigo-50/50 dark:bg-indigo-500/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-indigo-200 dark:border-indigo-500/30 rounded-lg text-sm focus:border-indigo-500 outline-none leading-relaxed resize-none transition-colors"
+                  placeholder="কুরিয়ারের জন্য স্পেশাল ইনস্ট্রাকশন..."
+                ></textarea>
               </div>
             </div>
           </div>
@@ -524,7 +589,7 @@ export default function EditOrderPage() {
           {/* Order Summary */}
           <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-6 sticky top-6 transition-colors">
             <h2 className="text-base font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2">
-              <Receipt size={18} className="text-blue-600 dark:text-blue-400" /> Order Summary
+              <Receipt size={18} className="text-[#7A1B38]" /> Order Summary
             </h2>
 
             <div className="space-y-3 text-sm">
@@ -557,7 +622,7 @@ export default function EditOrderPage() {
               type="submit"
               disabled={cart.length === 0 || isSaving || !isPhoneValid}
               className={`w-full mt-6 py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${cart.length > 0 && !isSaving && isPhoneValid
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 dark:shadow-none'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 dark:shadow-none cursor-pointer'
                 : 'bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed'
                 }`}
             >
@@ -567,6 +632,39 @@ export default function EditOrderPage() {
 
         </div>
       </form>
+
+      {/* ================= STEADFAST MANUAL UPDATE WARNING MODAL ================= */}
+      {showSteadfastWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl border border-amber-200 dark:border-amber-500/20 overflow-hidden p-6 text-center">
+            
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+              <AlertTriangle size={32} />
+            </div>
+
+            <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-2">
+              অর্ডার আপডেট হয়েছে!
+            </h3>
+            
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-4 rounded-xl mb-6">
+              <p className="text-sm font-bold text-amber-700 dark:text-amber-400 leading-relaxed">
+                "এই অর্ডারটি অলরেডি কুরিয়ারে বুক করা আছে। দয়া করে Steadfast প্যানেলেও ম্যানুয়ালি আপডেট করে দিন।"
+              </p>
+            </div>
+
+            <button 
+              onClick={() => {
+                setShowSteadfastWarning(false);
+                router.push("/dashboard/orders"); 
+              }}
+              className="w-full py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-lg flex justify-center items-center gap-2 cursor-pointer"
+            >
+              ঠিক আছে, বুঝতে পেরেছি <CheckCircle2 size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
