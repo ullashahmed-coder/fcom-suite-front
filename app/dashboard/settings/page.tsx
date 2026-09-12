@@ -24,7 +24,8 @@ export default function SettingsPage() {
   const [isGeneratingBackup, setIsGeneratingBackup] = useState(false);
 
   // 🚀 ফিক্স: ডামি ডেটা সরিয়ে ফাঁকা করে দেওয়া হয়েছে
-  const [settings, setSettings] = useState({
+
+    const [settings, setSettings] = useState({
     shopId: "", 
     storeName: "",
     currency: "BDT",
@@ -45,6 +46,11 @@ export default function SettingsPage() {
     smsSenderId: "",
     autoBackup: true,
     twoFactorAuth: true,
+    // 🚀 ডেলিভারি চার্জের ফিল্ডগুলো এখানে যোগ করে দেওয়া হলো যাতে টাইপ এরর না আসে
+    insideDhakaCharge: 0,
+    outsideDhakaCharge: 0,
+    subCityName: "",
+    subCityCharge: 0,
   });
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
