@@ -14,10 +14,8 @@ export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   
-  // 🚀 নতুন: KPI কার্ড ফিল্টারিংয়ের জন্য স্টেট
   const [activeKpi, setActiveKpi] = useState("ALL");
 
-  // প্রাইস রেঞ্জের জন্য স্টেট
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
@@ -66,7 +64,6 @@ export default function ProductsPage() {
     }
   };
 
-  // 🚀 Restore Function
   const handleRestore = async (id: string) => {
     if (!id) return;
     try {
@@ -88,7 +85,6 @@ export default function ProductsPage() {
     }
   };
 
-  // 🚀 Permanent Delete Function
   const handlePermanentDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to permanently delete this product? This action cannot be undone.")) return;
     
@@ -128,7 +124,6 @@ export default function ProductsPage() {
     }
   };
 
-  // 🚀 KPI ক্যালকুলেশন 
   const activeProducts = products.filter(p => !p.isDeleted);
   const trashedProducts = products.filter(p => p.isDeleted);
 
@@ -138,7 +133,6 @@ export default function ProductsPage() {
   const activeCategoriesCount = new Set(activeProducts.map(p => p.category).filter(Boolean)).size;
   const trashCount = trashedProducts.length;
 
-  // 🚀 মাল্টি-লেভেল ফিল্টারিং লজিক
   const filteredProducts = products.filter(product => {
     if (activeKpi === "TRASH" && !product.isDeleted) return false;
     if (activeKpi !== "TRASH" && product.isDeleted) return false; 
@@ -153,35 +147,35 @@ export default function ProductsPage() {
   });
 
   return (
-    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-6 font-sans transition-colors duration-300">
+    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6 font-sans transition-colors duration-300">
       
       {/* ================= HEADER ================= */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <Box className="text-indigo-600 dark:text-indigo-400" size={24} /> Products Inventory
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage your catalog, pricing, and stock availability.</p>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage your catalog, pricing, and stock availability.</p>
         </div>
         
-        <Link href="/dashboard/products/create" className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
+        <Link href="/dashboard/products/create" className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transition-colors">
           <Plus size={18} /> Add New Product
         </Link>
       </div>
 
-      {/* ================= KPI CARDS ================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      {/* ================= KPI CARDS (RESPONSIVE: 2 cols on mobile, 5 cols on desktop) ================= */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
           { id: "ALL", label: "Total Products", value: totalProducts, icon: <Layers size={18} />, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
           { id: "LOW_STOCK", label: "Low Stock", value: lowStockCount, icon: <AlertTriangle size={18} />, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
           { id: "OUT_OF_STOCK", label: "Out of Stock", value: outOfStockCount, icon: <X size={18} />, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
           { id: "CATEGORIES", label: "Categories", value: activeCategoriesCount, icon: <Tag size={18} />, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-500/10", noClick: true },
-          { id: "TRASH", label: "Trash", value: trashCount, icon: <Trash2 size={18} />, color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-100 dark:bg-white/10" },
+          { id: "TRASH", label: "Trash", value: trashCount, icon: <Trash2 size={18} />, color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-100 dark:bg-white/10", span: "col-span-2 md:col-span-1" },
         ].map((kpi, idx) => (
           <div 
             key={idx} 
             onClick={() => !kpi.noClick && setActiveKpi(kpi.id)}
-            className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between transition-all ${
+            className={`p-4 rounded-xl border shadow-sm flex items-center justify-between transition-all ${kpi.span || ''} ${
               kpi.noClick ? 'cursor-default border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a2421]' : 'cursor-pointer hover:shadow-md'
             } ${
               activeKpi === kpi.id 
@@ -190,20 +184,20 @@ export default function ProductsPage() {
             }`}
           >
             <div>
-              <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{kpi.label}</p>
-              <h3 className={`text-2xl font-bold ${kpi.color}`}>{isLoading ? "-" : kpi.value}</h3>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{kpi.label}</p>
+              <h3 className={`text-xl sm:text-2xl font-bold ${kpi.color}`}>{isLoading ? "-" : kpi.value}</h3>
             </div>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${kpi.bg} ${kpi.color}`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center ${kpi.bg} ${kpi.color}`}>
               {kpi.icon}
             </div>
           </div>
         ))}
       </div>
 
-      {/* ================= TOOLBAR & FILTERS ================= */}
+      {/* ================= TOOLBAR & FILTERS (RESPONSIVE DESKTOP/MOBILE) ================= */}
       <div className="bg-white dark:bg-[#1a2421] p-4 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6 transition-colors">
         
-        <div className="relative w-full xl:w-[320px] shrink-0">
+        <div className="relative w-full xl:w-[300px] shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
           <input 
             type="text" 
@@ -213,14 +207,14 @@ export default function ProductsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-          <div className="flex items-center bg-gray-50 dark:bg-white/5 p-1 rounded-full border border-gray-200 dark:border-transparent shadow-sm overflow-x-auto">
+          <div className="flex items-center bg-gray-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-transparent shadow-sm overflow-x-auto max-w-full">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-1.5 text-[12px] rounded-full transition-colors whitespace-nowrap ${
+                className={`px-3.5 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap ${
                   activeCategory === cat 
-                    ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 font-bold shadow-sm dark:border dark:border-white/10" 
+                    ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 font-bold shadow-sm" 
                     : "text-slate-600 dark:text-gray-400 font-medium hover:text-slate-800 dark:hover:text-gray-200"
                 }`}
               >
@@ -228,8 +222,6 @@ export default function ProductsPage() {
               </button>
             ))}
           </div>
-
-          <div className="h-8 w-px bg-gray-200 dark:bg-white/10 hidden sm:block"></div>
 
           <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 p-1.5 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm">
              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase ml-1">Price:</span>
@@ -266,7 +258,7 @@ export default function ProductsPage() {
           <p className="text-gray-500 text-sm mt-1">Try adjusting your filters or category selection.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredProducts.map((product) => {
             const statusLabel = getStockStatusText(product.stock);
             return (
@@ -275,80 +267,81 @@ export default function ProductsPage() {
                 className={`bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group ${product.isDeleted ? 'opacity-75 grayscale-[50%]' : ''}`}
               >
                 {/* Image Handle */}
-                <div className={`h-48 w-full relative bg-gray-100 dark:bg-[#141d1a] flex items-center justify-center`}>
+                <div className={`h-36 sm:h-44 w-full relative bg-gray-100 dark:bg-[#141d1a] flex items-center justify-center`}>
                   {product.imageUrl ? (
                     <img 
                       src={product.imageUrl.startsWith('http') ? product.imageUrl : `${apiUrl}${product.imageUrl}`} 
                       alt={product.name} 
-                      className="absolute inset-0 w-full h-full object-cover" 
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                     />
                   ) : (
                     <ImageIcon size={32} className="text-gray-300 dark:text-white/20" />
                   )}
-                  <div className="absolute top-3 right-3 z-10">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border shadow-sm backdrop-blur-md ${getStatusColor(statusLabel)}`}>
+                  <div className="absolute top-2.5 right-2.5 z-10">
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border shadow-sm backdrop-blur-md ${getStatusColor(statusLabel)}`}>
                       {statusLabel}
                     </span>
                   </div>
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded uppercase">
+                {/* DETAILS SECTION */}
+                <div className="p-3.5 sm:p-4 flex-1 flex flex-col">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
                       {product.category || "Uncategorized"}
                     </span>
-                    <span className="text-[11px] text-gray-400 font-medium">SKU: {product.sku}</span>
+                    <span className="text-[10px] text-gray-400 font-medium">SKU: {product.sku}</span>
                   </div>
                   
-                  <h3 className="text-[15px] font-bold text-slate-800 dark:text-white mt-2 leading-tight line-clamp-2 mb-4 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white mt-1 leading-snug line-clamp-1 mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {product.name}
                   </h3>
                   
                   <div className="mt-auto">
-                    <div className="flex justify-between items-end mb-4">
+                    <div className="flex justify-between items-center mb-3 bg-gray-50 dark:bg-white/5 p-2.5 rounded-xl border border-gray-100 dark:border-white/5">
                       <div>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-0.5">Price</p>
-                        <p className="text-lg font-extrabold text-slate-800 dark:text-white">৳ {product.price}</p>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Price</p>
+                        <p className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-white">৳ {product.price}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-0.5">Stock</p>
-                        <p className={`text-[15px] font-bold ${product.stock > 10 ? 'text-slate-700 dark:text-gray-300' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {product.stock} <span className="text-xs font-normal">pcs</span>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Stock</p>
+                        <p className={`text-xs sm:text-sm font-bold ${product.stock > 10 ? 'text-slate-700 dark:text-gray-300' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {product.stock} <span className="text-[10px] font-normal">pcs</span>
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-4 border-t border-gray-100 dark:border-white/10">
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 dark:border-white/10">
                       {!product.isDeleted ? (
                         <>
-                          <button 
-                            onClick={() => setSelectedProduct(product)}
-                            className="flex items-center justify-center gap-1.5 py-2 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-slate-600 dark:text-gray-300 rounded-lg text-[12px] font-bold transition-colors"
-                          >
-                            <Eye size={14} /> Quick View
-                          </button>
-                          
                           <Link 
                             href={`/dashboard/products/${product.id}/edit`} 
-                            className="flex items-center justify-center gap-1.5 py-2 bg-gray-50 dark:bg-white/5 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-gray-300 rounded-lg text-[12px] font-bold transition-colors"
+                            className="flex items-center justify-center gap-1.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-gray-300 rounded-lg text-[11px] font-bold transition-colors"
                           >
-                            <Edit3 size={14} /> Edit
+                            <Edit3 size={13} /> Edit
                           </Link>
+                          
+                          <button 
+                            onClick={() => handleDelete(product.id)}
+                            className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50/50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>
                         </>
                       ) : (
                         <>
                           <button 
                             onClick={() => handleRestore(product.id)}
-                            className="flex items-center justify-center gap-1.5 py-2 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[12px] font-bold transition-colors"
+                            className="flex items-center justify-center gap-1.5 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[11px] font-bold transition-colors"
                           >
-                            <RotateCcw size={14} /> Restore
+                            <RotateCcw size={13} /> Restore
                           </button>
                           
                           <button 
                             onClick={() => handlePermanentDelete(product.id)}
-                            className="flex items-center justify-center gap-1.5 py-2 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[12px] font-bold transition-colors"
+                            className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
                           >
-                            <Trash2 size={14} /> Delete
+                            <Trash2 size={13} /> Delete
                           </button>
                         </>
                       )}
@@ -389,7 +382,7 @@ export default function ProductsPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded uppercase">
@@ -441,11 +434,10 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {/* আপডেট করা ড্রয়ার ফুটার */}
-            <div className="p-6 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-3 shrink-0">
+            <div className="p-5 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-3 shrink-0">
               <button 
                 onClick={() => selectedProduct.isDeleted ? handlePermanentDelete(selectedProduct.id) : handleDelete(selectedProduct.id)}
-                className="py-3 rounded-xl border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                className="py-2.5 rounded-xl border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
               >
                 <Trash2 size={16} /> {selectedProduct.isDeleted ? "Delete Forever" : "Move to Trash"}
               </button>
@@ -453,14 +445,14 @@ export default function ProductsPage() {
               {!selectedProduct.isDeleted ? (
                 <Link 
                   href={`/dashboard/products/${selectedProduct.id}/edit`} 
-                  className="py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
+                  className="py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
                 >
                   <Edit3 size={16}/> Edit Product
                 </Link>
               ) : (
                 <button 
                   onClick={() => handleRestore(selectedProduct.id)}
-                  className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
+                  className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
                 >
                   <RotateCcw size={16}/> Restore
                 </button>

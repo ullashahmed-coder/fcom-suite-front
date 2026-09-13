@@ -213,121 +213,138 @@ export default function CustomersPage() {
   }, 0);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto pb-10 transition-colors relative">
+    <div className="space-y-4 sm:space-y-6 max-w-[1400px] mx-auto pb-10 transition-colors relative bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6">
       
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center bg-white dark:bg-[#1a2421] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none gap-4 transition-colors">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none gap-3 sm:gap-4 transition-colors">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Customers</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage and view your customer base and their lifetime value</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <Users className="text-emerald-600 dark:text-emerald-500" size={24} /> Customers
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Manage and view your customer base and their lifetime value</p>
         </div>
-        <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm">
+        <button onClick={openAddModal} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 sm:px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm">
           <UserPlus size={18} /> Add Customer
         </button>
       </div>
 
-      {/* ================= STATS CARDS ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white dark:bg-[#1a2421] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+      {/* ================= STATS CARDS (Responsive Grid) ================= */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        
+        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Total Customer</p>
-              <h3 className="text-3xl font-black text-slate-800 dark:text-white">{totalCustomersCount}</h3>
+              <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Total Customer</p>
+              <h3 className="text-xl sm:text-3xl font-black text-slate-800 dark:text-white">{totalCustomersCount}</h3>
             </div>
-            <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-500"><Users size={20}/></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-500">
+              <Users size={16} className="sm:w-[20px] sm:h-[20px]" />
+            </div>
           </div>
         </div>
         
-        <div className="bg-white dark:bg-[#1a2421] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Repeat Customer</p>
-              <h3 className="text-3xl font-black text-slate-800 dark:text-white">{repeatCustomersCount}</h3>
-              <p className="text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded inline-block mt-2">
+              <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Repeat Customer</p>
+              <h3 className="text-xl sm:text-3xl font-black text-slate-800 dark:text-white">{repeatCustomersCount}</h3>
+              <p className="text-[9px] sm:text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded inline-block mt-1.5 sm:mt-2">
                 {totalCustomersCount > 0 ? Math.round((repeatCustomersCount / totalCustomersCount) * 100) : 0}% Return Rate
               </p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-500"><RefreshCw size={20}/></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-500">
+              <RefreshCw size={16} className="sm:w-[20px] sm:h-[20px]" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1a2421] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Active Database</p>
-              <h3 className="text-3xl font-black text-slate-800 dark:text-white">{customers.length}</h3>
-              <p className="text-xs font-bold text-emerald-500 mt-2">Verified records</p>
+              <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Active Database</p>
+              <h3 className="text-xl sm:text-3xl font-black text-slate-800 dark:text-white">{customers.length}</h3>
+              <p className="text-[10px] sm:text-xs font-bold text-emerald-500 mt-1.5 sm:mt-2">Verified records</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500"><UserPlus size={20}/></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+              <UserPlus size={16} className="sm:w-[20px] sm:h-[20px]" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1a2421] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors relative overflow-hidden">
+        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors relative overflow-hidden">
           <div className="flex justify-between items-start relative z-10">
             <div>
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Lifetime Sells</p>
-              <h3 className="text-3xl font-black text-emerald-700 dark:text-rose-400 flex items-center gap-1"><span className="text-xl">৳</span> {totalLifetimeSpent.toLocaleString()}</h3>
+              <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Lifetime Sells</p>
+              <h3 className="text-lg sm:text-3xl font-black text-emerald-700 dark:text-rose-400 flex items-center gap-1">
+                <span className="text-sm sm:text-xl">৳</span> {totalLifetimeSpent > 100000 ? (totalLifetimeSpent / 1000).toFixed(1) + 'k' : totalLifetimeSpent.toLocaleString()}
+              </h3>
             </div>
-            <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-[#7A1B38] dark:text-rose-400"><TrendingUp size={20}/></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-[#7A1B38] dark:text-rose-400">
+              <TrendingUp size={16} className="sm:w-[20px] sm:h-[20px]" />
+            </div>
           </div>
         </div>
+
       </div>
 
-      {/* ================= TOOLBAR ================= */}
-      <div className="bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors">
+      {/* ================= TOOLBAR & FILTERS ================= */}
+      <div className="bg-white dark:bg-[#1a2421] p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 transition-colors shadow-sm">
+        
         <div className="relative w-full xl:w-[350px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input 
             type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Customers..." 
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/5 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors text-slate-800 dark:text-white"
+            className="w-full pl-9 pr-3 py-2 sm:py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/5 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors text-slate-800 dark:text-white"
           />
         </div>
 
-        <div className="flex items-center gap-3 overflow-x-auto custom-scrollbar pb-1 xl:pb-0">
-          <div className="flex items-center bg-slate-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-transparent shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full xl:w-auto overflow-hidden">
+          {/* Scrollable Date Filters */}
+          <div className="flex items-center bg-slate-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-transparent shrink-0 w-full sm:w-auto overflow-x-auto custom-scrollbar">
             {["Today", "Yesterday", "Last 7", "Last 30", "Inactive 90+ Days", "All time"].map(filter => (
               <button 
                 key={filter} onClick={() => setActiveDateFilter(filter)}
-                className={`px-4 py-1.5 text-xs rounded-md font-bold transition-colors ${activeDateFilter === filter ? (filter === "Inactive 90+ Days" ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 shadow-sm" : "bg-white dark:bg-[#1a2421] text-emerald-600 dark:text-emerald-400 shadow-sm") : "text-slate-500 hover:text-slate-700 dark:text-gray-400 font-medium"}`}
+                className={`px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs rounded-md font-bold transition-colors whitespace-nowrap ${activeDateFilter === filter ? (filter === "Inactive 90+ Days" ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 shadow-sm" : "bg-white dark:bg-[#1a2421] text-emerald-600 dark:text-emerald-400 shadow-sm") : "text-slate-500 hover:text-slate-700 dark:text-gray-400 font-medium"}`}
               >
                 {filter}
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-lg text-sm font-bold text-slate-700 dark:text-gray-300 hover:bg-slate-50 shrink-0">
+          
+          <button className="flex items-center justify-center gap-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold text-slate-700 dark:text-gray-300 hover:bg-slate-50 w-full sm:w-auto shrink-0 shadow-sm">
             <Download size={14} /> Export
           </button>
         </div>
       </div>
 
-      {/* BULK ACTION BAR */}
-      <div className="flex items-center justify-between bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 transition-colors">
-        <div className="flex items-center gap-3 ml-2">
+      {/* ================= BULK ACTION BAR ================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-[#1a2421] p-3 sm:p-3.5 rounded-xl border border-gray-200 dark:border-white/5 transition-colors shadow-sm gap-3 sm:gap-0">
+        <div className="flex items-center gap-3 pl-1 sm:ml-2">
           <input
             type="checkbox"
             className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer"
             checked={filteredCustomers.length > 0 && selectedCustomerIds.length === filteredCustomers.length}
             onChange={handleSelectAll}
           />
-          <span className="text-sm font-bold text-slate-700 dark:text-gray-200">
+          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-gray-200">
             Select All {selectedCustomerIds.length > 0 ? `(${selectedCustomerIds.length})` : ""}
           </span>
         </div>
 
         {selectedCustomerIds.length > 0 && (
-          <div className="flex items-center gap-2 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 w-full sm:w-auto animate-in fade-in duration-200">
             <button 
               onClick={() => { setSmsText(""); setSmsModal({ isOpen: true, type: 'SMS', isBulk: true }); }}
-              className="text-xs font-bold px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-slate-700 dark:text-gray-200 rounded-lg hover:bg-slate-50 dark:hover:bg-white/10 transition flex items-center gap-2"
+              className="flex-1 sm:flex-none text-[11px] sm:text-xs font-bold px-3 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-slate-700 dark:text-gray-200 rounded-lg hover:bg-slate-50 dark:hover:bg-white/10 transition flex items-center justify-center gap-1.5 shadow-sm"
             >
-              <MessageSquare size={14} className="text-[#7A1B38]"/> Bulk SMS
+              <MessageSquare size={14} className="text-[#7A1B38]"/> <span className="hidden sm:inline">Bulk</span> SMS
             </button>
             <button 
               onClick={() => { setSmsText("হ্যালো [Name],\nআমরা আপনাকে মিস করছি! আপনার পরবর্তী অর্ডারে ১০০ টাকা ছাড় পেতে কোডটি ব্যবহার করুন: WINBACK100"); setSmsModal({ isOpen: true, type: 'OFFER', isBulk: true }); }}
-              className="text-xs font-bold px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center gap-2"
+              className="flex-1 sm:flex-none text-[11px] sm:text-xs font-bold px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-1.5"
             >
-              <Tag size={14} /> Send Bulk Offer
+              <Tag size={14} /> Send <span className="hidden sm:inline">Bulk</span> Offer
             </button>
           </div>
         )}
@@ -339,16 +356,15 @@ export default function CustomersPage() {
           <Loader2 className="animate-spin text-emerald-600" size={40} />
         </div>
       ) : filteredCustomers.length === 0 ? (
-        <div className="py-20 text-center bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/5 rounded-2xl">
-          <Users size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-          <h3 className="text-lg font-bold text-slate-700 dark:text-gray-300">কোনো কাস্টমার পাওয়া যায়নি!</h3>
+        <div className="py-16 sm:py-20 text-center bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm">
+          <Users size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3 sm:mb-4" />
+          <h3 className="text-[15px] sm:text-lg font-bold text-slate-700 dark:text-gray-300">কোনো কাস্টমার পাওয়া যায়নি!</h3>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
           {filteredCustomers.map((customer) => {
             const customerOrderCount = customer.orders?.length || customer.totalOrders || 0;
             const isRepeat = customerOrderCount > 1;
-            
             const customerLifetimeSpent = customer.lifetimeSpent || (customer.orders ? customer.orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0) : 0);
 
             return (
@@ -364,33 +380,33 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="absolute top-4 right-4">
-                  <span className={`text-[9px] font-black px-2.5 py-1 rounded uppercase tracking-wider ${isRepeat ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10'}`}>
+                  <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-wider ${isRepeat ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10'}`}>
                     {isRepeat ? 'REPEAT' : 'NEW'}
                   </span>
                 </div>
 
-                <div className="p-6 pt-10 flex flex-col items-center text-center border-b border-gray-50 dark:border-white/5">
-                  <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-xl font-black text-slate-400 mb-3 border border-slate-200 dark:border-white/10">
+                <div className="p-5 sm:p-6 pt-10 flex flex-col items-center text-center border-b border-gray-50 dark:border-white/5">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-xl font-black text-slate-400 mb-2.5 sm:mb-3 border border-slate-200 dark:border-white/10">
                     {customer.name ? customer.name.substring(0, 1).toUpperCase() : "C"}
                   </div>
-                  <h3 className="text-[17px] font-bold text-slate-800 dark:text-white line-clamp-1">{customer.name}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1"><Phone size={12}/> {customer.phone}</p>
+                  <h3 className="text-[15px] sm:text-[17px] font-bold text-slate-800 dark:text-white line-clamp-1">{customer.name}</h3>
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1"><Phone size={12}/> {customer.phone}</p>
                 </div>
 
-                <div className="p-4 grid grid-cols-2 gap-4 bg-slate-50/50 dark:bg-white/5">
+                <div className="p-3.5 sm:p-4 grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50/50 dark:bg-white/5">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5 mt-1"><ShoppingBag size={14} className="text-slate-400"/> {customerOrderCount}</p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</p>
+                    <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1 mt-1"><ShoppingBag size={12} className="text-slate-400"/> {customerOrderCount}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lifetime Spent</p>
-                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1">৳ {customerLifetimeSpent.toLocaleString()}</p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lifetime Spent</p>
+                    <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1">৳ {customerLifetimeSpent.toLocaleString()}</p>
                   </div>
                 </div>
 
-                <div className="p-4 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-transparent">
-                  <span className="text-[10px] font-medium text-gray-400">Joined: {formatDate(customer.createdAt)}</span>
-                  <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-bold text-emerald-700 dark:text-rose-400 hover:text-emerald-800 flex items-center gap-1 transition-colors">
+                <div className="p-3 sm:p-4 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-transparent">
+                  <span className="text-[9px] sm:text-[10px] font-medium text-gray-400">Joined: {formatDate(customer.createdAt)}</span>
+                  <button onClick={() => setSelectedCustomer(customer)} className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-rose-400 hover:text-emerald-800 flex items-center gap-1 transition-colors">
                     <Eye size={14}/> View Profile
                   </button>
                 </div>
@@ -404,119 +420,117 @@ export default function CustomersPage() {
       {selectedCustomer && mounted && createPortal(
         <>
           <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/60 backdrop-blur-sm z-[99998] transition-opacity" onClick={() => setSelectedCustomer(null)} />
-          <div className="fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white dark:bg-[#1a2421] shadow-2xl z-[99999] flex flex-col animate-in slide-in-from-right duration-300">
+          <div className="fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white dark:bg-[#1a2421] shadow-2xl z-[99999] flex flex-col animate-in slide-in-from-bottom sm:slide-in-from-right duration-300">
             
-            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start bg-slate-50 dark:bg-[#141d1a]">
-              <div className="flex gap-4 items-center">
-                <div className="w-14 h-14 rounded-full bg-white dark:bg-[#1a2421] flex items-center justify-center text-xl font-black text-emerald-700 border border-gray-200 dark:border-white/10 shadow-sm">
+            <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start bg-slate-50 dark:bg-[#141d1a]">
+              <div className="flex gap-3 sm:gap-4 items-center">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white dark:bg-[#1a2421] flex items-center justify-center text-lg sm:text-xl font-black text-emerald-700 border border-gray-200 dark:border-white/10 shadow-sm">
                   {selectedCustomer.name?.substring(0, 1).toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-white">{selectedCustomer.name}</h2>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${(selectedCustomer.orders?.length || selectedCustomer.totalOrders || 0) > 1 ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white max-w-[160px] sm:max-w-[200px] truncate">{selectedCustomer.name}</h2>
+                    <span className={`text-[8px] sm:text-[9px] font-black px-1.5 sm:px-2 py-0.5 rounded uppercase ${(selectedCustomer.orders?.length || selectedCustomer.totalOrders || 0) > 1 ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
                       {(selectedCustomer.orders?.length || selectedCustomer.totalOrders || 0) > 1 ? 'REPEAT' : 'NEW'}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{selectedCustomer.phone}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1">{selectedCustomer.phone}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedCustomer(null)} className="p-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-transparent rounded-full text-gray-400 hover:text-rose-500 transition shadow-sm"><X size={18} /></button>
+              <button onClick={() => setSelectedCustomer(null)} className="p-1.5 sm:p-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-transparent rounded-full text-gray-400 hover:text-rose-500 transition shadow-sm"><X size={18} /></button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6 custom-scrollbar pb-24">
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <button 
                   onClick={() => { setSmsText(""); setSmsModal({ isOpen: true, type: 'SMS', isBulk: false }); }}
-                  className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold shadow-sm transition"
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition"
                 >
-                  <MessageSquare size={16} /> Send SMS
+                  <MessageSquare size={14} className="sm:w-[16px] sm:h-[16px]" /> Send SMS
                 </button>
                 <button 
                   onClick={() => {
                     setSmsText(`হ্যালো [Name],\nআপনার জন্য রয়েছে স্পেশাল ডিসকাউন্ট! আজই অর্ডার করুন এবং উপভোগ করুন দারুন ছাড়।`);
                     setSmsModal({ isOpen: true, type: 'OFFER', isBulk: false });
                   }}
-                  className="flex items-center justify-center gap-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-slate-700 dark:text-emerald-400 py-3 rounded-xl text-sm font-bold transition"
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-slate-700 dark:text-emerald-400 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm"
                 >
-                  <CheckCircle2 size={16} className={smsModal.type === 'OFFER' ? 'text-emerald-600' : ''} /> Send Offer
+                  <CheckCircle2 size={14} className={smsModal.type === 'OFFER' ? 'text-emerald-600 sm:w-[16px] sm:h-[16px]' : 'sm:w-[16px] sm:h-[16px]'} /> Send Offer
                 </button>
               </div>
 
               <div>
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Customer Information</h3>
+                <h3 className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 sm:mb-3">Customer Information</h3>
                 <div className="bg-white dark:bg-transparent border border-gray-200 dark:border-white/10 rounded-xl divide-y divide-gray-100 dark:divide-white/5">
-                  <div className="p-3.5 flex justify-between text-sm"><span className="text-gray-500">District:</span> <span className="font-bold text-slate-800 dark:text-white">{selectedCustomer.district || 'N/A'}</span></div>
-                  <div className="p-3.5 flex justify-between text-sm"><span className="text-gray-500">Address:</span> <span className="font-bold text-slate-800 dark:text-white">{selectedCustomer.address || 'N/A'}</span></div>
-                  <div className="p-3.5 flex justify-between text-sm"><span className="text-gray-500">Joined:</span> <span className="font-bold text-slate-800 dark:text-white">{formatDate(selectedCustomer.createdAt)}</span></div>
+                  <div className="p-3 sm:p-3.5 flex justify-between text-xs sm:text-sm"><span className="text-gray-500">District:</span> <span className="font-bold text-slate-800 dark:text-white">{selectedCustomer.district || 'N/A'}</span></div>
+                  <div className="p-3 sm:p-3.5 flex justify-between text-xs sm:text-sm"><span className="text-gray-500">Address:</span> <span className="font-bold text-slate-800 dark:text-white max-w-[60%] text-right">{selectedCustomer.address || 'N/A'}</span></div>
+                  <div className="p-3 sm:p-3.5 flex justify-between text-xs sm:text-sm"><span className="text-gray-500">Joined:</span> <span className="font-bold text-slate-800 dark:text-white">{formatDate(selectedCustomer.createdAt)}</span></div>
                 </div>
               </div>
 
               {/* 🚀 PURCHASE HISTORY SECTION (WITH IMAGES) */}
               <div>
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex justify-between items-end">
+                <h3 className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 sm:mb-3 flex justify-between items-end">
                   <span>Purchase History</span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-black">
                     Total: ৳ {selectedCustomer.lifetimeSpent || (selectedCustomer.orders ? selectedCustomer.orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0) : 0).toLocaleString()}
                   </span>
                 </h3>
                 
-                <div className="space-y-3">
+                <div className="space-y-2.5 sm:space-y-3">
                   {selectedCustomer.orders && selectedCustomer.orders.length > 0 ? (
                     selectedCustomer.orders.map((order: any, idx: number) => (
-                      <div key={idx} className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-xl p-4 transition-colors hover:border-gray-200 dark:hover:border-white/10">
-                        <div className="flex justify-between items-start border-b border-gray-200 dark:border-white/10 pb-2 mb-3">
+                      <div key={idx} className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-xl p-3.5 sm:p-4 transition-colors hover:border-gray-200 dark:hover:border-white/10 shadow-sm">
+                        <div className="flex justify-between items-start border-b border-gray-200 dark:border-white/10 pb-2 mb-2.5 sm:mb-3">
                            <div>
-                             <p className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1"><Calendar size={12}/> {formatDateTime(order.createdAt)}</p>
-                             <p className="text-[13px] font-bold text-slate-800 dark:text-gray-200 mt-1">{order.orderNo}</p>
+                             <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1"><Calendar size={10} className="sm:w-[12px] sm:h-[12px]"/> {formatDateTime(order.createdAt)}</p>
+                             <p className="text-[12px] sm:text-[13px] font-bold text-slate-800 dark:text-gray-200 mt-1">{order.orderNo}</p>
                            </div>
-                           <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">৳ {order.totalAmount}</span>
+                           <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400">৳ {order.totalAmount}</span>
                         </div>
                         
-                        {/* 🚀 Order Items List (With Image) */}
-                        <div className="space-y-3">
+                        <div className="space-y-2.5 sm:space-y-3">
                           {order.items && order.items.length > 0 ? (
                             order.items.map((item: any, i: number) => {
                               const imgUrl = item.product?.imageUrl ? (item.product.imageUrl.startsWith('http') ? item.product.imageUrl : `${apiUrl}${item.product.imageUrl}`) : null;
                               
                               return (
-                                <div key={i} className="flex justify-between items-center text-[13px]">
-                                  <div className="flex items-center gap-3">
-                                    {/* Product Image */}
+                                <div key={i} className="flex justify-between items-center text-[12px] sm:text-[13px]">
+                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                                     {imgUrl ? (
                                       <img 
                                         src={imgUrl} 
                                         alt={item.product?.name || "Product"} 
-                                        className="w-8 h-8 rounded-md shadow-sm object-cover border border-gray-200 dark:border-white/10 bg-white"
+                                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-md shadow-sm object-cover border border-gray-200 dark:border-white/10 bg-white shrink-0"
                                       />
                                     ) : (
-                                      <div className="w-8 h-8 rounded-md shadow-sm bg-slate-200 dark:bg-white/10 flex items-center justify-center border border-gray-200 dark:border-white/10">
-                                        <ImageIcon size={14} className="text-gray-400" />
+                                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md shadow-sm bg-slate-200 dark:bg-white/10 flex items-center justify-center border border-gray-200 dark:border-white/10 shrink-0">
+                                        <ImageIcon size={12} className="text-gray-400 sm:w-[14px] sm:h-[14px]" />
                                       </div>
                                     )}
                                     
-                                    <div className="flex flex-col">
-                                      <span className="text-slate-700 dark:text-gray-300 font-bold leading-tight">
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="text-slate-700 dark:text-gray-300 font-bold leading-tight truncate">
                                         {item.product?.name || "Unknown Item"}
                                       </span>
-                                      <span className="text-gray-400 dark:text-gray-500 text-[11px] mt-0.5">Qty: {item.quantity}</span>
+                                      <span className="text-gray-400 dark:text-gray-500 text-[10px] sm:text-[11px] mt-0.5">Qty: {item.quantity}</span>
                                     </div>
                                   </div>
-                                  <span className="text-slate-700 dark:text-gray-300 font-bold">৳ {item.price * item.quantity}</span>
+                                  <span className="text-slate-700 dark:text-gray-300 font-bold ml-2 shrink-0">৳ {item.price * item.quantity}</span>
                                 </div>
                               );
                             })
                           ) : (
-                            <p className="text-xs text-gray-400 italic">No item details found.</p>
+                            <p className="text-[11px] sm:text-xs text-gray-400 italic">No item details found.</p>
                           )}
                         </div>
                       </div>
                     ))
                   ) : (
                     <div className="text-center py-6 bg-slate-50 dark:bg-white/5 border border-dashed border-gray-200 dark:border-white/10 rounded-xl">
-                      <ShoppingBag size={24} className="mx-auto text-gray-300 mb-2" />
-                      <p className="text-xs text-gray-500 font-medium">কোনো অর্ডার হিস্ট্রি পাওয়া যায়নি।</p>
+                      <ShoppingBag size={20} className="mx-auto text-gray-300 mb-1.5 sm:mb-2 sm:w-[24px] sm:h-[24px]" />
+                      <p className="text-[11px] sm:text-xs text-gray-500 font-medium">কোনো অর্ডার হিস্ট্রি পাওয়া যায়নি।</p>
                     </div>
                   )}
                 </div>
@@ -524,19 +538,19 @@ export default function CustomersPage() {
 
             </div>
 
-            {/* 🚀 Drawer Footer: Edit & Delete Options */}
-            <div className="p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-3 transition-colors">
+            {/* 🚀 Drawer Footer: Sticky bottom on Mobile */}
+            <div className="absolute sm:relative bottom-0 left-0 right-0 p-4 sm:p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-2 sm:gap-3 transition-colors shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] sm:shadow-none z-20">
                <button 
                  onClick={() => openEditModal(selectedCustomer)} 
-                 className="py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition"
+                 className="py-3 sm:py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition"
                >
-                 <Edit3 size={16}/> Edit Details
+                 <Edit3 size={14} className="sm:w-[16px] sm:h-[16px]"/> Edit
                </button>
                <button 
                  onClick={() => handleDeleteCustomer(selectedCustomer.id)} 
-                 className="py-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition"
+                 className="py-3 sm:py-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition"
                >
-                 <Trash2 size={16}/> Delete
+                 <Trash2 size={14} className="sm:w-[16px] sm:h-[16px]"/> Delete
                </button>
             </div>
 
@@ -550,51 +564,51 @@ export default function CustomersPage() {
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             
-            <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
               <div>
-                <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  {smsModal.type === 'OFFER' ? <Tag size={18} className="text-emerald-500"/> : <MessageSquare size={18} className="text-emerald-600"/>}
-                  {smsModal.type === 'OFFER' ? 'Send Promotional Offer' : 'Send Custom SMS'}
+                <h2 className="text-[15px] sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-1.5 sm:gap-2">
+                  {smsModal.type === 'OFFER' ? <Tag size={16} className="text-emerald-500 sm:w-[18px] sm:h-[18px]"/> : <MessageSquare size={16} className="text-emerald-600 sm:w-[18px] sm:h-[18px]"/>}
+                  {smsModal.type === 'OFFER' ? 'Promotional Offer' : 'Custom SMS'}
                 </h2>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
                   {smsModal.isBulk 
                     ? <span className="text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded">Sending to {selectedCustomerIds.length} Customers</span>
                     : <span>To: <span className="font-bold text-slate-700 dark:text-gray-300">{selectedCustomer?.name}</span></span>
                   }
                 </p>
               </div>
-              <button onClick={() => setSmsModal({isOpen: false, type: 'SMS', isBulk: false})} className="text-gray-400 hover:text-rose-500"><X size={20}/></button>
+              <button onClick={() => setSmsModal({isOpen: false, type: 'SMS', isBulk: false})} className="text-gray-400 hover:text-rose-500 p-1"><X size={18} className="sm:w-[20px] sm:h-[20px]"/></button>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
               <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Insert Variables</p>
+                <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Insert Variables</p>
                 <div className="flex gap-2">
-                  <button onClick={() => insertVariable('[Name]')} className="px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-bold text-slate-600 dark:text-gray-300 rounded border border-gray-200 dark:border-white/10 transition">+ Customer Name</button>
-                  <button onClick={() => insertVariable('[Discount]')} className="px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-bold text-slate-600 dark:text-gray-300 rounded border border-gray-200 dark:border-white/10 transition">+ Discount %</button>
+                  <button onClick={() => insertVariable('[Name]')} className="px-2.5 sm:px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300 rounded border border-gray-200 dark:border-white/10 transition">+ Name</button>
+                  <button onClick={() => insertVariable('[Discount]')} className="px-2.5 sm:px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300 rounded border border-gray-200 dark:border-white/10 transition">+ Discount</button>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300 flex justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300 flex justify-between">
                   Message Content
                   <span className={`${smsText.length > 160 ? 'text-rose-500' : 'text-emerald-500'} font-black`}>
                     {smsText.length} / 160
                   </span>
                 </label>
                 <textarea 
-                  rows={5} 
+                  rows={4} 
                   value={smsText}
                   onChange={(e) => setSmsText(e.target.value)}
                   placeholder="Type your message here..." 
-                  className="w-full mt-2 p-3 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white resize-none leading-relaxed"
+                  className="w-full mt-2 p-3 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white resize-none leading-relaxed"
                 ></textarea>
               </div>
 
-              <div className="pt-4 flex justify-end gap-3">
-                <button onClick={() => setSmsModal({isOpen: false, type: 'SMS', isBulk: false})} className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition">Cancel</button>
-                <button onClick={handleSendSMS} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-md">
-                  <Send size={16} /> Send {smsModal.isBulk ? 'Bulk ' : ''}Message
+              <div className="pt-2 sm:pt-4 flex justify-end gap-2.5 sm:gap-3">
+                <button onClick={() => setSmsModal({isOpen: false, type: 'SMS', isBulk: false})} className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition text-xs sm:text-sm">Cancel</button>
+                <button onClick={handleSendSMS} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 sm:px-6 py-2.5 rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-bold transition-colors shadow-md">
+                  <Send size={14} className="sm:w-[16px] sm:h-[16px]" /> Send {smsModal.isBulk ? 'Bulk ' : ''}Message
                 </button>
               </div>
             </div>
@@ -607,49 +621,49 @@ export default function CustomersPage() {
       {isCustomerModalOpen && mounted && createPortal(
         <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                {customerForm.id ? <Edit3 size={18}/> : <UserPlus size={18}/>} 
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+              <h2 className="text-[15px] sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-1.5 sm:gap-2">
+                {customerForm.id ? <Edit3 size={16} className="sm:w-[18px] sm:h-[18px]"/> : <UserPlus size={16} className="sm:w-[18px] sm:h-[18px]"/>} 
                 {customerForm.id ? "Edit Customer" : "Add New Customer"}
               </h2>
-              <button onClick={() => setIsCustomerModalOpen(false)} className="text-gray-400 hover:text-rose-500"><X size={20}/></button>
+              <button onClick={() => setIsCustomerModalOpen(false)} className="text-gray-400 hover:text-rose-500 p-1"><X size={18} className="sm:w-[20px] sm:h-[20px]"/></button>
             </div>
             
-            <form className="p-6 space-y-4" onSubmit={handleSaveCustomer}>
+            <form className="p-4 sm:p-6 space-y-3 sm:space-y-4" onSubmit={handleSaveCustomer}>
               <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Phone Number *</label>
+                <label className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300">Phone Number *</label>
                 <input 
                   type="tel" required placeholder="01XXXXXXXXX" 
                   value={customerForm.phone} onChange={(e) => setCustomerForm({...customerForm, phone: e.target.value})}
-                  className="w-full mt-1.5 px-4 py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
+                  className="w-full mt-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Customer Name *</label>
+                <label className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300">Customer Name *</label>
                 <input 
                   type="text" required placeholder="Full Name" 
                   value={customerForm.name} onChange={(e) => setCustomerForm({...customerForm, name: e.target.value})}
-                  className="w-full mt-1.5 px-4 py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
+                  className="w-full mt-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300">District *</label>
+                <label className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300">District *</label>
                 <input 
                   type="text" required placeholder="District Name" 
                   value={customerForm.district} onChange={(e) => setCustomerForm({...customerForm, district: e.target.value})}
-                  className="w-full mt-1.5 px-4 py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
+                  className="w-full mt-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Default Delivery Address</label>
+                <label className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-gray-300">Default Delivery Address</label>
                 <textarea 
                   rows={2} placeholder="Full address..." 
                   value={customerForm.address} onChange={(e) => setCustomerForm({...customerForm, address: e.target.value})}
-                  className="w-full mt-1.5 px-4 py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white resize-none"
+                  className="w-full mt-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500 text-slate-800 dark:text-white resize-none"
                 ></textarea>
               </div>
-              <button type="submit" disabled={isSaving} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg mt-4 transition-colors flex items-center justify-center gap-2 shadow-sm">
-                {isSaving ? <Loader2 className="animate-spin" size={18} /> : (customerForm.id ? "Update Customer" : "Save Customer")}
+              <button type="submit" disabled={isSaving} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 sm:py-3 rounded-lg mt-3 sm:mt-4 transition-colors flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm text-sm">
+                {isSaving ? <Loader2 className="animate-spin" size={16} /> : (customerForm.id ? "Update Customer" : "Save Customer")}
               </button>
             </form>
           </div>

@@ -102,13 +102,13 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${CARD_CLASS} p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100">{title}</h3>
+    <div className={`${CARD_CLASS} p-4 sm:p-6 ${className}`}>
+      <div className="flex justify-between items-center mb-4 sm:mb-6">
+        <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-700 dark:text-gray-100">{title}</h3>
         {actionHref && (
           <Link
             href={actionHref}
-            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+            className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 sm:px-0 sm:py-0 sm:bg-transparent rounded-md sm:rounded-none"
           >
             {actionLabel}
           </Link>
@@ -283,9 +283,9 @@ export default function TenantDashboardHome() {
   const KPI_DATA: KpiCard[] = [
     { id: "sales", label: "Sells Today", value: kpiStats ? formatBDT(kpiStats.salesToday) : "৳ 0", icon: DollarSign, colorClass: "emerald" },
     { id: "orders", label: "Orders Today", value: kpiStats ? kpiStats.ordersToday.toString() : "0", icon: ShoppingBag, colorClass: "blue" },
-    { id: "low-stock", label: "Low Stock Items", value: lowStockItemsCount.toString(), icon: AlertTriangle, colorClass: "amber" },
-    { id: "courier", label: "Pending Courier", value: kpiStats ? kpiStats.pendingCourier.toString() : "0", icon: Truck, colorClass: "purple" },
-    { id: "packing", label: "Pending Packing", value: kpiStats ? kpiStats.pendingPacking.toString() : "0", icon: Package, colorClass: "orange" },
+    { id: "low-stock", label: "Low Stock", value: lowStockItemsCount.toString(), icon: AlertTriangle, colorClass: "amber" },
+    { id: "courier", label: "Courier Pnd.", value: kpiStats ? kpiStats.pendingCourier.toString() : "0", icon: Truck, colorClass: "purple" },
+    { id: "packing", label: "Packing Pnd.", value: kpiStats ? kpiStats.pendingPacking.toString() : "0", icon: Package, colorClass: "orange" },
     { id: "returns", label: "Return Today", value: "0", icon: RotateCcw, colorClass: "red" },
   ];
 
@@ -294,91 +294,91 @@ export default function TenantDashboardHome() {
   ];
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto pb-10 min-h-screen p-6">
+    <div className="space-y-4 sm:space-y-6 max-w-[1500px] mx-auto pb-10 min-h-screen p-4 sm:p-6 bg-[#f8f9fc] dark:bg-[#0f1714] transition-colors duration-300">
       
       <PlatformAnnouncement />
       
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* ================= KPI CARDS (Responsive Grid) ================= */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {KPI_DATA.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <div key={kpi.id} className={`${CARD_CLASS} p-5`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${ICON_COLOR_STYLES[kpi.colorClass]}`}>
-                <Icon size={16} />
+            <div key={kpi.id} className={`${CARD_CLASS} p-3.5 sm:p-5 flex flex-col justify-center`}>
+              <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center mb-2 sm:mb-3 ${ICON_COLOR_STYLES[kpi.colorClass]}`}>
+                <Icon size={14} className="sm:w-[18px] sm:h-[18px]" />
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-1">{kpi.label}</p>
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white">{kpi.value}</h3>
+              <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5 sm:mb-1 truncate">{kpi.label}</p>
+              <h3 className="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white truncate">{kpi.value}</h3>
             </div>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        {/* BEST SELLING PRODUCTS */}
+        {/* ================= BEST SELLING PRODUCTS ================= */}
         <Panel title="Best Selling Products" actionHref="/dashboard/products" className="lg:col-span-3">
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-500" size={24} /></div>
           ) : products.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
               {products.slice(0, 5).map((item, index) => (
-                <div key={item.id} className="border border-gray-100 dark:border-white/5 rounded-xl p-2 relative bg-white dark:bg-[#141d1a] transition-colors">
+                <div key={item.id} className="border border-gray-100 dark:border-white/5 rounded-xl p-2.5 relative bg-slate-50 dark:bg-[#141d1a] transition-colors hover:shadow-sm">
                   <span className="absolute -top-2 -left-2 w-5 h-5 bg-white dark:bg-[#1a2421] border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-10">
                     {index + 1}
                   </span>
                   {item.imageUrl ? (
-                    <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3" />
+                    <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} alt={item.name} className="w-full h-24 sm:h-28 object-cover rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
                   ) : (
-                    <ThumbPlaceholder size="w-full h-28" rounded="rounded-lg mb-3" />
+                    <ThumbPlaceholder size="w-full h-24 sm:h-28" rounded="rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
                   )}
-                  <h4 className="text-[13px] font-semibold text-slate-800 dark:text-gray-200 mb-2 truncate">{item.name}</h4>
-                  <div className="flex justify-between text-[11px]">
+                  <h4 className="text-[11px] sm:text-[13px] font-bold text-slate-800 dark:text-gray-200 mb-2 truncate">{item.name}</h4>
+                  <div className="flex justify-between items-end">
                     <div>
-                      <p className="text-gray-400 dark:text-gray-500 font-medium">STOCK</p>
-                      <p className="font-bold text-slate-700 dark:text-gray-300">{item.stock}</p>
+                      <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">STOCK</p>
+                      <p className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-gray-300">{item.stock}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-gray-400 dark:text-gray-500 font-medium">PRICE</p>
-                      <p className="font-bold text-emerald-500 dark:text-emerald-400">{formatBDT(item.price)}</p>
+                      <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">PRICE</p>
+                      <p className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400">{formatBDT(item.price)}</p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-10 text-gray-500 text-sm">No products found. Add products to see best sellers.</div>
+            <div className="text-center py-10 text-gray-500 text-xs sm:text-sm">No products found. Add products to see best sellers.</div>
           )}
         </Panel>
 
-        {/* LIVE ACTIVITY FEED */}
+        {/* ================= LIVE ACTIVITY FEED ================= */}
         <Panel title="Live Activity Feed" actionHref="/dashboard/logs">
-          <div className="flex justify-between text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-4 px-2">
+          <div className="flex justify-between text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-4 px-2 uppercase tracking-wider">
             <span>USER</span>
             <span>SYSTEM</span>
           </div>
           
           {activityFeed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
-               <Info size={24} className="mb-2 opacity-50" />
-               <p className="text-[11px] font-medium">No recent activities found.</p>
+               <Info size={20} className="mb-2 opacity-50 sm:w-[24px] sm:h-[24px]" />
+               <p className="text-[10px] sm:text-[11px] font-medium">No recent activities found.</p>
             </div>
           ) : (
-            <div className="space-y-6 relative before:absolute before:inset-0 before:mx-auto before:h-full before:w-px before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-white/10 before:to-transparent">
+            <div className="space-y-5 sm:space-y-6 relative before:absolute before:inset-0 before:mx-auto before:h-full before:w-px before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-white/10 before:to-transparent">
               {activityFeed.slice(0, 5).map((entry) => {
                 const textBlock = (
-                  <div className="flex flex-col text-[11px]">
-                    <span className="text-gray-400 dark:text-gray-500">{entry.time}</span>
-                    <span className={`font-bold ${entry.statusColorClass}`}>{entry.status}</span>
-                    {entry.detail && <span className="text-slate-600 dark:text-gray-300 truncate">{entry.detail}</span>}
+                  <div className="flex flex-col">
+                    <span className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500">{entry.time}</span>
+                    <span className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${entry.statusColorClass}`}>{entry.status}</span>
+                    {entry.detail && <span className="text-[10px] sm:text-[11px] text-slate-600 dark:text-gray-300 truncate mt-0.5">{entry.detail}</span>}
                   </div>
                 );
 
                 return (
                   <div key={entry.id} className="relative flex items-center justify-center">
-                    <div className="w-[calc(50%-1rem)] pr-4 text-right">{entry.side === "user" && textBlock}</div>
-                    <div className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#1a2421] shadow z-10 ${entry.dotColorClass}`} aria-hidden="true" />
-                    <div className="w-[calc(50%-1rem)] pl-4 text-left">{entry.side === "system" && textBlock}</div>
+                    <div className="w-[calc(50%-0.75rem)] sm:w-[calc(50%-1rem)] pr-3 sm:pr-4 text-right">{entry.side === "user" && textBlock}</div>
+                    <div className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border-2 border-white dark:border-[#1a2421] shadow z-10 ${entry.dotColorClass}`} aria-hidden="true" />
+                    <div className="w-[calc(50%-0.75rem)] sm:w-[calc(50%-1rem)] pl-3 sm:pl-4 text-left">{entry.side === "system" && textBlock}</div>
                   </div>
                 );
               })}
@@ -386,16 +386,16 @@ export default function TenantDashboardHome() {
           )}
         </Panel>
 
-        {/* INVENTORY STATUS */}
+        {/* ================= INVENTORY STATUS ================= */}
         <Panel title="Inventory Status" actionHref="/dashboard/products" className="lg:col-span-3 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm min-w-[500px]">
               <thead className="border-b border-gray-100 dark:border-white/5">
                 <tr>
-                  <th scope="col" className="py-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Product Name</th>
-                  <th scope="col" className="py-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">SKU</th>
-                  <th scope="col" className="py-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-center">Stock</th>
-                  <th scope="col" className="py-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">Status</th>
+                  <th scope="col" className="py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Product Name</th>
+                  <th scope="col" className="py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">SKU</th>
+                  <th scope="col" className="py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-center">Stock</th>
+                  <th scope="col" className="py-2.5 sm:py-3 text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-white/5">
@@ -403,31 +403,30 @@ export default function TenantDashboardHome() {
                   products.slice(0, 5).map((item) => {
                     const status = getStockStatus(item.stock);
                     return (
-                      <tr key={item.id}>
-                        {/* 🚀 এখানে প্রোডাক্টের ছবি এড করা হয়েছে */}
-                        <td className="py-3 flex items-center gap-3">
+                      <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
+                        <td className="py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3">
                           {item.imageUrl ? (
                             <img 
                               src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} 
                               alt={item.name} 
-                              className="w-8 h-8 rounded object-cover border border-gray-100 dark:border-white/10" 
+                              className="w-7 h-7 sm:w-8 sm:h-8 rounded object-cover border border-gray-100 dark:border-white/10 shrink-0" 
                             />
                           ) : (
-                            <ThumbPlaceholder size="w-8 h-8" />
+                            <ThumbPlaceholder size="w-7 h-7 sm:w-8 sm:h-8" />
                           )}
-                          <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300">{item.name}</span>
+                          <span className="text-[11px] sm:text-[12px] font-bold text-slate-700 dark:text-gray-300 truncate max-w-[140px] sm:max-w-[200px]">{item.name}</span>
                         </td>
-                        <td className="py-3 text-[12px] text-gray-500 dark:text-gray-400">{item.sku}</td>
-                        <td className="py-3 text-[12px] font-bold text-slate-700 dark:text-gray-300 text-center">{item.stock}</td>
-                        <td className="py-3 text-right">
-                          <span className={`text-[10px] font-bold px-2 py-1 rounded ${status.className}`}>{status.label}</span>
+                        <td className="py-2.5 sm:py-3 text-[11px] sm:text-[12px] text-gray-500 dark:text-gray-400">{item.sku || 'N/A'}</td>
+                        <td className="py-2.5 sm:py-3 text-[11px] sm:text-[12px] font-bold text-slate-700 dark:text-gray-300 text-center">{item.stock}</td>
+                        <td className="py-2.5 sm:py-3 text-right">
+                          <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:py-1 rounded uppercase ${status.className}`}>{status.label}</span>
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={4} className="text-center py-6 text-gray-500 text-sm">No inventory data available.</td>
+                    <td colSpan={4} className="text-center py-6 text-gray-500 text-xs sm:text-sm">No inventory data available.</td>
                   </tr>
                 )}
               </tbody>
@@ -435,45 +434,45 @@ export default function TenantDashboardHome() {
           </div>
         </Panel>
 
-        {/* IMMEDIATE ATTENTION */}
-        <div className={`${CARD_CLASS} p-6`}>
-          <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-4">Immediate Attention</h3>
-          <div className="space-y-4">
+        {/* ================= IMMEDIATE ATTENTION ================= */}
+        <div className={`${CARD_CLASS} p-4 sm:p-6`}>
+          <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-4">Immediate Attention</h3>
+          <div className="space-y-3 sm:space-y-4">
             {immediateAttentionItems.length > 0 ? (
               immediateAttentionItems.slice(0, 5).map((item) => (
                 <div key={item.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     {item.imageUrl ? (
                        <img 
                          src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} 
                          alt={item.name} 
-                         className="w-8 h-8 rounded object-cover border border-gray-100 dark:border-white/10" 
+                         className="w-7 h-7 sm:w-8 sm:h-8 rounded object-cover border border-gray-100 dark:border-white/10 shrink-0" 
                        />
                      ) : (
-                       <ThumbPlaceholder size="w-8 h-8" />
+                       <ThumbPlaceholder size="w-7 h-7 sm:w-8 sm:h-8" />
                      )}
-                    <div>
-                      <h4 className="text-[12px] font-bold text-slate-800 dark:text-gray-200 truncate w-32">{item.name}</h4>
-                      <p className="text-[10px] font-bold text-red-500 dark:text-red-400">Stock: {item.stock}</p>
+                    <div className="min-w-0">
+                      <h4 className="text-[11px] sm:text-[12px] font-bold text-slate-800 dark:text-gray-200 truncate w-32 sm:w-40">{item.name}</h4>
+                      <p className="text-[9px] sm:text-[10px] font-bold text-red-500 dark:text-red-400 mt-0.5">Stock: {item.stock}</p>
                     </div>
                   </div>
-                  <AlertTriangle size={16} className="text-red-400 dark:text-red-500/80" />
+                  <AlertTriangle size={14} className="text-red-400 dark:text-red-500/80 shrink-0 sm:w-[16px] sm:h-[16px]" />
                 </div>
               ))
             ) : (
-              <p className="text-xs text-gray-400 py-4 text-center">All items are well-stocked!</p>
+              <p className="text-[11px] sm:text-xs text-gray-400 py-4 text-center">All items are well-stocked!</p>
             )}
           </div>
         </div>
 
-        {/* TEAM PERFORMANCE */}
-        <div className={`${CARD_CLASS} p-6 lg:col-span-2`}>
-          <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-6">Team Performance</h3>
-          <div className="space-y-4">
+        {/* ================= TEAM PERFORMANCE ================= */}
+        <div className={`${CARD_CLASS} p-4 sm:p-6 lg:col-span-2`}>
+          <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-4 sm:mb-6">Team Performance</h3>
+          <div className="space-y-3 sm:space-y-4">
             {TEAM_TO_SHOW.map((member) => (
-              <div key={member.id} className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold border ${
+              <div key={member.id} className="flex justify-between items-center bg-slate-50 dark:bg-white/5 p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-white/5">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[11px] sm:text-[12px] font-bold border shrink-0 ${
                      member.role.includes("OWNER") || member.role.includes("ADMIN") 
                      ? "bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/20"
                      : "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-500/20"
@@ -481,46 +480,46 @@ export default function TenantDashboardHome() {
                     {member.initial}
                   </div>
                   <div>
-                    <h4 className="text-[12px] font-bold text-slate-800 dark:text-gray-200 leading-tight">{member.name}</h4>
-                    <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 tracking-wider">{member.role}</span>
+                    <h4 className="text-[11px] sm:text-[12px] font-bold text-slate-800 dark:text-gray-200 leading-tight">{member.name}</h4>
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{member.role}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <h4 className="text-[13px] font-bold text-slate-800 dark:text-gray-200 leading-tight">{member.tasks}</h4>
-                  <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 tracking-wider">TASKS</span>
+                  <h4 className="text-[12px] sm:text-[13px] font-black text-slate-800 dark:text-gray-200 leading-tight">{member.tasks}</h4>
+                  <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">TASKS</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 🚀 TOP DISTRICT SALES (Now dynamic) */}
-        <div className={`${CARD_CLASS} p-6 lg:col-span-2`}>
-          <h3 className="text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-6">Top District Sales</h3>
-          <div className="space-y-5">
+        {/* ================= TOP DISTRICT SALES ================= */}
+        <div className={`${CARD_CLASS} p-4 sm:p-6 lg:col-span-2`}>
+          <h3 className="text-[14px] sm:text-[15px] font-bold text-slate-700 dark:text-gray-100 mb-4 sm:mb-6">Top District Sales</h3>
+          <div className="space-y-4 sm:space-y-5">
             {districtSales.length > 0 ? (
               districtSales.map((dist, index) => (
                 <div key={dist.id}>
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300 truncate pr-2">
+                  <div className="flex justify-between items-end mb-1.5 sm:mb-1">
+                    <span className="text-[11px] sm:text-[12px] font-bold text-slate-700 dark:text-gray-300 truncate pr-2">
                       {index + 1}. {dist.name}
                     </span>
-                    <span className="text-[12px] font-bold text-slate-800 dark:text-gray-200 shrink-0">
+                    <span className="text-[11px] sm:text-[12px] font-black text-slate-800 dark:text-gray-200 shrink-0">
                       {formatBDT(dist.amount)}
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden" role="progressbar" aria-valuenow={dist.percent} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="w-full h-1.5 sm:h-2 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden" role="progressbar" aria-valuenow={dist.percent} aria-valuemin={0} aria-valuemax={100}>
                     <div className={`h-full rounded-full ${dist.colorClass}`} style={{ width: `${dist.percent}%` }} />
                   </div>
                 </div>
               ))
             ) : (
               <div>
-                <div className="flex justify-between items-end mb-1">
-                  <span className="text-[12px] font-bold text-slate-700 dark:text-gray-300">1. No Sales Data</span>
-                  <span className="text-[12px] font-bold text-slate-800 dark:text-gray-200">৳ 0</span>
+                <div className="flex justify-between items-end mb-1.5 sm:mb-1">
+                  <span className="text-[11px] sm:text-[12px] font-bold text-slate-700 dark:text-gray-300">1. No Sales Data</span>
+                  <span className="text-[11px] sm:text-[12px] font-black text-slate-800 dark:text-gray-200">৳ 0</span>
                 </div>
-                <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden" role="progressbar" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}>
+                <div className="w-full h-1.5 sm:h-2 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden" role="progressbar" aria-valuenow={0} aria-valuemin={0} aria-valuemax={100}>
                   <div className="h-full bg-gray-300 dark:bg-gray-700 rounded-full" style={{ width: `0%` }} />
                 </div>
               </div>
