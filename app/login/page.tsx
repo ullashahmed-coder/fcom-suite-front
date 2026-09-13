@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Logo from "../components/Logo";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, CheckCircle2, Sun, Moon, ShieldCheck } from "lucide-react"; // 🚀 ShieldCheck যোগ করা হয়েছে
+import { Lock, Mail, ArrowRight, Eye, EyeOff, Loader2, CheckCircle2, Sun, Moon, ShieldCheck } from "lucide-react"; 
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -12,7 +12,6 @@ export default function LoginPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
-  // আমাদের ব্যাকএন্ডের ডেমো ক্রেডেনশিয়ালস সেট করে দিলাম
   const [email, setEmail] = useState("admin@deshiotati.com");
   const [password, setPassword] = useState("password123");
   const [showPassword, setShowPassword] = useState(false);
@@ -20,14 +19,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // 🚀 Remember Me State
+  const [rememberMe, setRememberMe] = useState(false);
+
   // 🚀 2FA States
   const [requires2FA, setRequires2FA] = useState(false);
   const [tempUserId, setTempUserId] = useState("");
   const [otpCode, setOtpCode] = useState("");
 
-  // Hydration error ফিক্স করার জন্য
+  // Hydration error ফিক্স এবং Remember Me ইমেইল চেক করার জন্য
   useEffect(() => {
     setMounted(true);
+    // পেজ লোড হলে চেক করবে আগে ইমেইল সেভ করা ছিল কি না
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
   }, []);
 
   // ================= LOGIN HANDLER =================
@@ -101,6 +109,13 @@ export default function LoginPage() {
       localStorage.setItem("user", JSON.stringify(data.user));
     }
     document.cookie = `access_token=${data.access_token}; path=/; max-age=2592000; SameSite=Lax`;
+
+    // 🚀 Remember Me লজিক
+    if (rememberMe) {
+      localStorage.setItem("rememberedEmail", email);
+    } else {
+      localStorage.removeItem("rememberedEmail");
+    }
 
     setSuccess(true);
     setLoading(false);
@@ -287,9 +302,10 @@ export default function LoginPage() {
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 transition-colors group-focus-within/input:text-emerald-600 dark:group-focus-within/input:text-emerald-400">
                       Password
                     </label>
-                    <button type="button" className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded">
+                    {/* 🚀 ফিক্স: Forgot Password লিংক অ্যাক্টিভ করা হয়েছে */}
+                    <Link href="/forgot-password" className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline transition-all outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded">
                       Forgot password?
-                    </button>
+                    </Link>
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/input:text-emerald-500 transition-colors duration-300 z-10" size={18} />
@@ -314,9 +330,12 @@ export default function LoginPage() {
                   </div>
                 </div>
 
+                {/* 🚀 ফিক্স: Remember me স্টেট যুক্ত করা হয়েছে */}
                 <label className="flex items-center gap-3 text-[14px] font-medium text-gray-600 dark:text-gray-400 cursor-pointer group mt-2 select-none w-max">
                   <input 
                     type="checkbox" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-4 h-4 rounded-md border-gray-300 text-emerald-600 focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer" 
                   />
                   <span className="group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">
