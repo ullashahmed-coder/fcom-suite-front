@@ -334,13 +334,13 @@ export default function SettingsPage() {
                     : "bg-transparent border-2 border-transparent hover:bg-gray-50 dark:hover:bg-white/5"
                 }`}
               >
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                  activeTab === tab.id 
-                    ? "bg-emerald-600 text-white" 
-                    : "bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-gray-400"
-                }`}>
-                  {React.cloneElement(tab.icon as React.ReactElement, { className: "w-4 h-4 sm:w-5 sm:h-5" })}
-                </div>
+<div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+  activeTab === tab.id 
+    ? "bg-emerald-600 text-white" 
+    : "bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-gray-400"
+}`}>
+  {tab.icon}
+</div>
                 <div>
                   <h3 className={`text-[12px] sm:text-[14px] font-bold ${activeTab === tab.id ? "text-emerald-700 dark:text-emerald-400" : "text-slate-700 dark:text-gray-200"}`}>
                     {tab.label}
