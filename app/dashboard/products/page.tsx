@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Search, Plus, Edit3, Trash2, Box, Tag, 
-  AlertTriangle, Layers, Eye, X, Filter, Image as ImageIcon, CheckCircle2, Loader2, RotateCcw
+  AlertTriangle, Layers, Eye, X, Filter, Image as ImageIcon, CheckCircle2, Loader2, RotateCcw, Flame, TrendingUp
 } from "lucide-react";
 import Link from "next/link";
 
@@ -18,44 +18,88 @@ export default function ProductsPage() {
 
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-  const fetchProducts = async () => {
+  const fetchProductsAndOrders = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/products`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data);
+      const headers = { "Authorization": `Bearer ${token}` };
+
+      const [prodRes, orderRes] = await Promise.all([
+        fetch(`${apiUrl}/products`, { headers }),
+        fetch(`${apiUrl}/orders`, { headers })
+      ]);
+
+      if (prodRes.ok) {
+        const allProducts = await prodRes.json();
+        let allOrders = [];
+        if (orderRes.ok) {
+          allOrders = await orderRes.json();
+        }
+
+        const salesById: Record<string, { sold: number; revenue: number }> = {};
+        const salesByName: Record<string, { sold: number; revenue: number }> = {};
+
+        allOrders.forEach((order: any) => {
+          if (!order.isDeleted && order.items && Array.isArray(order.items)) {
+            order.items.forEach((item: any) => {
+              const qty = Number(item.quantity) || 1;
+              const price = Number(item.price) || 0;
+              const pId = item.productId || item.product?.id || item.id;
+              
+              if (pId) {
+                const idStr = String(pId);
+                if (!salesById[idStr]) salesById[idStr] = { sold: 0, revenue: 0 };
+                salesById[idStr].sold += qty;
+                salesById[idStr].revenue += qty * price;
+              }
+
+              const pName = (item.product?.name || item.name || "").trim().toLowerCase();
+              if (pName) {
+                if (!salesByName[pName]) salesByName[pName] = { sold: 0, revenue: 0 };
+                salesByName[pName].sold += qty;
+                salesByName[pName].revenue += qty * price;
+              }
+            });
+          }
+        });
+
+        const updatedProducts = allProducts.map((p: any) => {
+          const stats = salesById[String(p.id)] || salesByName[(p.name || "").trim().toLowerCase()] || { sold: p.soldCount || 0, revenue: (p.soldCount || 0) * (p.price || 0) };
+          return {
+            ...p,
+            soldCount: stats.sold,
+            totalRevenue: stats.revenue
+          };
+        });
+
+        setProducts(updatedProducts);
       }
     } catch (error) {
-      console.error("Failed to fetch products:", error);
+      console.error("Failed to fetch products or orders:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProductsAndOrders();
   }, []);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to move this product to trash?")) return;
-    
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`${apiUrl}/products/${id}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      
       if (res.ok) {
         alert("Product moved to trash!");
         setSelectedProduct(null);
-        fetchProducts(); 
+        fetchProductsAndOrders(); 
       } else {
         alert("Failed to move product to trash.");
       }
@@ -72,11 +116,10 @@ export default function ProductsPage() {
         method: "PATCH",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      
       if (res.ok) {
         alert("Product restored!");
         setSelectedProduct(null);
-        fetchProducts(); 
+        fetchProductsAndOrders(); 
       } else {
         alert("Failed to restore product.");
       }
@@ -86,19 +129,17 @@ export default function ProductsPage() {
   };
 
   const handlePermanentDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this product? This action cannot be undone.")) return;
-    
+    if (!window.confirm("Are you sure you want to permanently delete this product?")) return;
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`${apiUrl}/products/${id}/permanent`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      
       if (res.ok) {
         alert("Product permanently deleted!");
         setSelectedProduct(null);
-        fetchProducts(); 
+        fetchProductsAndOrders(); 
       } else {
         alert("Failed to permanently delete product.");
       }
@@ -130,7 +171,7 @@ export default function ProductsPage() {
   const totalProducts = activeProducts.length;
   const lowStockCount = activeProducts.filter(p => p.stock > 0 && p.stock < 10).length;
   const outOfStockCount = activeProducts.filter(p => p.stock <= 0).length;
-  const activeCategoriesCount = new Set(activeProducts.map(p => p.category).filter(Boolean)).size;
+  const bestSellersCount = activeProducts.filter(p => (p.soldCount || 0) > 0).length;
   const trashCount = trashedProducts.length;
 
   const filteredProducts = products.filter(product => {
@@ -138,12 +179,22 @@ export default function ProductsPage() {
     if (activeKpi !== "TRASH" && product.isDeleted) return false; 
     if (activeKpi === "LOW_STOCK" && (product.stock <= 0 || product.stock >= 10)) return false;
     if (activeKpi === "OUT_OF_STOCK" && product.stock > 0) return false;
+    if (activeKpi === "BEST_SELLING" && (product.soldCount || 0) <= 0) return false;
 
     const matchCategory = activeCategory === "All" || product.category === activeCategory;
     const matchMin = minPrice === "" || product.price >= Number(minPrice);
     const matchMax = maxPrice === "" || product.price <= Number(maxPrice);
+    const matchSearch = product.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        product.sku?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    return matchCategory && matchMin && matchMax;
+    return matchCategory && matchMin && matchMax && matchSearch;
+  }).sort((a, b) => {
+    // 🚀 যদি Best Selling ফিল্টার সিলেক্ট করা থাকে, তবে সর্বোচ্চ বিক্রি হওয়া প্রোডাক্টগুলো উপরে থাকবে
+    if (activeKpi === "BEST_SELLING") {
+      return (b.soldCount || 0) - (a.soldCount || 0);
+    }
+    // ডিফল্টভাবে নতুন বা সাধারণ অর্ডারে রাখতে পারেন
+    return 0;
   });
 
   return (
@@ -163,21 +214,19 @@ export default function ProductsPage() {
         </Link>
       </div>
 
-      {/* ================= KPI CARDS (RESPONSIVE: 2 cols on mobile, 5 cols on desktop) ================= */}
+      {/* ================= KPI CARDS ================= */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
           { id: "ALL", label: "Total Products", value: totalProducts, icon: <Layers size={18} />, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
+          { id: "BEST_SELLING", label: "Best Selling", value: bestSellersCount, icon: <Flame size={18} />, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
           { id: "LOW_STOCK", label: "Low Stock", value: lowStockCount, icon: <AlertTriangle size={18} />, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
           { id: "OUT_OF_STOCK", label: "Out of Stock", value: outOfStockCount, icon: <X size={18} />, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
-          { id: "CATEGORIES", label: "Categories", value: activeCategoriesCount, icon: <Tag size={18} />, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-500/10", noClick: true },
           { id: "TRASH", label: "Trash", value: trashCount, icon: <Trash2 size={18} />, color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-100 dark:bg-white/10", span: "col-span-2 md:col-span-1" },
         ].map((kpi, idx) => (
           <div 
             key={idx} 
-            onClick={() => !kpi.noClick && setActiveKpi(kpi.id)}
-            className={`p-4 rounded-xl border shadow-sm flex items-center justify-between transition-all ${kpi.span || ''} ${
-              kpi.noClick ? 'cursor-default border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a2421]' : 'cursor-pointer hover:shadow-md'
-            } ${
+            onClick={() => setActiveKpi(kpi.id)}
+            className={`p-4 rounded-xl border shadow-sm flex items-center justify-between transition-all cursor-pointer hover:shadow-md ${kpi.span || ''} ${
               activeKpi === kpi.id 
                 ? `ring-2 ring-indigo-500 border-transparent bg-indigo-50/50 dark:bg-white/5` 
                 : `border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a2421]`
@@ -194,13 +243,15 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      {/* ================= TOOLBAR & FILTERS (RESPONSIVE DESKTOP/MOBILE) ================= */}
+      {/* ================= TOOLBAR & FILTERS ================= */}
       <div className="bg-white dark:bg-[#1a2421] p-4 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6 transition-colors">
         
         <div className="relative w-full xl:w-[300px] shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
           <input 
             type="text" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by Product Name, SKU..." 
             className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors"
           />
@@ -261,6 +312,9 @@ export default function ProductsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredProducts.map((product) => {
             const statusLabel = getStockStatusText(product.stock);
+            const soldCount = product.soldCount || 0;
+            const totalRev = product.totalRevenue || soldCount * (product.price || 0);
+
             return (
               <div 
                 key={product.id} 
@@ -277,6 +331,15 @@ export default function ProductsPage() {
                   ) : (
                     <ImageIcon size={32} className="text-gray-300 dark:text-white/20" />
                   )}
+
+                  {soldCount > 0 && (
+                    <div className="absolute top-2.5 left-2.5 z-10">
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-amber-500 text-white shadow-sm flex items-center gap-1">
+                        <Flame size={10} /> Best Seller
+                      </span>
+                    </div>
+                  )}
+
                   <div className="absolute top-2.5 right-2.5 z-10">
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border shadow-sm backdrop-blur-md ${getStatusColor(statusLabel)}`}>
                       {statusLabel}
@@ -293,12 +356,22 @@ export default function ProductsPage() {
                     <span className="text-[10px] text-gray-400 font-medium">SKU: {product.sku}</span>
                   </div>
                   
-                  <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white mt-1 leading-snug line-clamp-1 mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white mt-1 leading-snug line-clamp-1 mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     {product.name}
                   </h3>
+
+                  {/* Sold & Revenue Info Card */}
+                  <div className="mb-3 bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-gray-100 dark:border-white/5 flex justify-between items-center text-[11px]">
+                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+                      <TrendingUp size={12} className="text-emerald-500" /> Sold: <strong className="text-slate-800 dark:text-white">{soldCount} pcs</strong>
+                    </span>
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                      ৳ {totalRev.toLocaleString()}
+                    </span>
+                  </div>
                   
                   <div className="mt-auto">
-                    <div className="flex justify-between items-center mb-3 bg-gray-50 dark:bg-white/5 p-2.5 rounded-xl border border-gray-100 dark:border-white/5">
+                    <div className="flex justify-between items-center mb-3 bg-gray-50 dark:bg-[#141d1a] p-2.5 rounded-xl border border-gray-100 dark:border-white/5">
                       <div>
                         <p className="text-[9px] text-gray-400 uppercase tracking-wider mb-0.5">Price</p>
                         <p className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-white">৳ {product.price}</p>
@@ -339,7 +412,7 @@ export default function ProductsPage() {
                           
                           <button 
                             onClick={() => handlePermanentDelete(product.id)}
-                            className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
+                            className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
                           >
                             <Trash2 size={13} /> Delete
                           </button>
@@ -423,12 +496,12 @@ export default function ProductsPage() {
                     </div>
                     <div>
                       <p className="text-[11px] font-bold text-gray-500 uppercase">Total Sold</p>
-                      <p className="text-[15px] font-bold text-slate-800 dark:text-white">0 Units</p>
+                      <p className="text-[15px] font-bold text-slate-800 dark:text-white">{selectedProduct.soldCount || 0} Units</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-[11px] font-bold text-gray-500 uppercase">Revenue</p>
-                    <p className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400">৳ 0</p>
+                    <p className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400">৳ {(selectedProduct.totalRevenue || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>

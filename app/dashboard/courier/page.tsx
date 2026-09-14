@@ -15,11 +15,13 @@ export default function CourierPage() {
   const [activeTab, setActiveTab] = useState<"All" | "Steadfast" | "Pathao" | "RedX">("All");
   const [selectedParcel, setSelectedParcel] = useState<any>(null);
   
-  // 🚀 মোবাইলে ডিটেইলস দেখানোর জন্য নতুন স্টেট
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   
   const [dateFilter, setDateFilter] = useState("All Time");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // 🚀 নতুন KPI কার্ড লেভেলের সাথে সামঞ্জস্যপূর্ণ ফিল্টার স্টেট ("IN REVIEW", "PENDING", "DELIVERED", "CANCELLED")
+  const [kpiFilter, setKpiFilter] = useState<string | null>(null);
 
   const dateFilters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All Time"];
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -33,9 +35,17 @@ export default function CourierPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        const courierStatuses = ['PROCESSING', 'SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED'];
+        
+        const courierStatuses = ['PACKED', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_REVIEW'];
         const dispatched = data.filter((o: any) => !o.isDeleted && o.consignmentId && courierStatuses.includes(o.status?.toUpperCase()));
+        
         setOrders(dispatched);
+
+        setSelectedParcel((prev: any) => {
+          if (!prev) return null;
+          const updatedParcel = dispatched.find((p: any) => p.id === prev.id);
+          return updatedParcel || prev;
+        });
       }
     } catch (error) {
       console.error("Failed to fetch courier data:", error);
@@ -45,8 +55,48 @@ export default function CourierPage() {
     }
   };
 
+  const handleForceSync = async () => {
+    setIsSyncing(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      
+      const syncRes = await fetch(`${apiUrl}/orders/sync-courier`, {
+        method: 'POST',
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      if (syncRes.ok) {
+        const data = await syncRes.json();
+        if(data.updatedCount > 0) {
+           alert(`✅ Sync Complete! ${data.updatedCount} orders updated from Steadfast.`);
+        } else {
+           alert(`✅ Sync Complete! All parcels are already up to date.`);
+        }
+      } else {
+         alert("⚠️ Failed to sync with courier server.");
+      }
+      
+      await fetchCourierOrders();
+      
+    } catch (error) {
+      console.error("Force sync failed:", error);
+      alert("Failed to sync with courier.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     fetchCourierOrders();
+
+    const interval = setInterval(() => {
+      fetchCourierOrders();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const formatDateTime = (dateString: string) => {
@@ -72,7 +122,7 @@ export default function CourierPage() {
       done: true 
     });
 
-    const isShipped = ['SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED'].includes(order.status?.toUpperCase());
+    const isShipped = ['SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_TRANSIT'].includes(order.status?.toUpperCase());
     const shippedLog = logs.find((l: any) => l.status?.toUpperCase() === 'SHIPPED');
     timeline.push({ 
       status: "In Transit", 
@@ -106,9 +156,46 @@ export default function CourierPage() {
     return "Unknown";
   };
 
+  // স্ট্যাটাস ম্যাপিং লজিক
+  const getMappedStatus = (status: string) => {
+    const s = status?.toUpperCase() || "";
+    if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return "DELIVERED";
+    if (['RETURNED', 'CANCELLED'].includes(s)) return "CANCELLED";
+    // যদি স্ট্যাটাস IN_REVIEW হয় কিন্তু কুরিয়ারে কনসাইনমেন্ট আইডি চলে আসে বা সিঙ্ক হয়ে Shipped হয়ে যায়, তবে সেটিকে IN_REVIEW হিসেবে ধরব না, Pending এ কাউন্ট হবে
+    if (s === 'IN_REVIEW') return "IN REVIEW";
+    if (['SHIPPED', 'IN_TRANSIT', 'PENDING', 'PACKED', 'PROCESSING'].includes(s)) return "PENDING";
+    return "PENDING"; 
+  };
+
+  // 🚀 নতুন KPI কাউন্ট লজিক (যাতে IN REVIEW থেকে সিন্স হয়ে গেলে সংখ্যা কমে যায়)
+  const kpiInReview = orders.filter(o => o.status?.toUpperCase() === 'IN_REVIEW').length;
+  
+  const kpiPending = orders.filter(o => {
+    const s = o.status?.toUpperCase();
+    // যেগুলোর স্ট্যাটাস শিফটেড বা ট্রানজিট বা প্রসেসিং, কিন্তু ইন রিভিউ না
+    return s !== 'IN_REVIEW' && s !== 'DELIVERED' && s !== 'RETURNED' && s !== 'CANCELLED';
+  }).length;
+
+  const kpiDelivered = orders.filter(o => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(o.status?.toUpperCase())).length;
+  const kpiCancelled = orders.filter(o => ['RETURNED', 'CANCELLED'].includes(o.status?.toUpperCase())).length;
+
+  // 🚀 ফিল্টারিং লজিক
   const filteredParcels = orders.filter(order => {
     const courierName = getCourierName(order);
     if (activeTab !== "All" && courierName !== activeTab) return false;
+
+    if (kpiFilter) {
+      const s = order.status?.toUpperCase();
+      if (kpiFilter === "IN REVIEW") {
+        if (s !== 'IN_REVIEW') return false;
+      } else if (kpiFilter === "PENDING") {
+        if (s === 'IN_REVIEW' || ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'CANCELLED'].includes(s)) return false;
+      } else if (kpiFilter === "DELIVERED") {
+        if (!['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return false;
+      } else if (kpiFilter === "CANCELLED") {
+        if (!['RETURNED', 'CANCELLED'].includes(s)) return false;
+      }
+    }
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -148,7 +235,6 @@ export default function CourierPage() {
     return true;
   });
 
-  // ডেস্কটপের জন্য অটো সিলেক্ট (মোবাইলে পপআপ যেন অটো ওপেন না হয় তাই এই লজিক)
   useEffect(() => {
     if (filteredParcels.length > 0 && !selectedParcel) {
       setSelectedParcel(filteredParcels[0]);
@@ -157,27 +243,18 @@ export default function CourierPage() {
     }
   }, [filteredParcels]);
 
-  // 🚀 মোবাইলে ক্লিক হ্যান্ডলার
   const handleParcelClick = (parcel: any) => {
     setSelectedParcel(parcel);
     setIsMobileDrawerOpen(true);
-  };
-
-  const getMappedStatus = (status: string) => {
-    const s = status?.toUpperCase() || "";
-    if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return "DELIVERED";
-    if (['RETURNED'].includes(s)) return "RETURNED";
-    if (['SHIPPED'].includes(s)) return "IN TRANSIT";
-    return "PENDING DISPATCH"; 
   };
 
   const getStatusColor = (rawStatus: string) => {
     const status = getMappedStatus(rawStatus);
     switch(status) {
       case "DELIVERED": return "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20";
-      case "IN TRANSIT": return "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20";
-      case "PENDING DISPATCH": return "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20";
-      case "RETURNED": return "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20";
+      case "PENDING": return "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20";
+      case "IN REVIEW": return "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20";
+      case "CANCELLED": return "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20";
       default: return "text-gray-600 bg-gray-50 border-gray-200";
     }
   };
@@ -186,19 +263,13 @@ export default function CourierPage() {
     const status = getMappedStatus(rawStatus);
     switch(status) {
       case "DELIVERED": return <CheckCircle2 size={12} />;
-      case "IN TRANSIT": return <Truck size={12} />;
-      case "PENDING DISPATCH": return <Clock size={12} />;
-      case "RETURNED": return <RefreshCw size={12} />;
+      case "PENDING": return <Truck size={12} />;
+      case "IN REVIEW": return <Clock size={12} />;
+      case "CANCELLED": return <RefreshCw size={12} />;
       default: return <Package size={12} />;
     }
   };
 
-  const kpiDispatched = orders.length;
-  const kpiInTransit = orders.filter(o => getMappedStatus(o.status) === 'IN TRANSIT').length;
-  const kpiDelivered = orders.filter(o => getMappedStatus(o.status) === 'DELIVERED').length;
-  const kpiReturned = orders.filter(o => getMappedStatus(o.status) === 'RETURNED').length;
-
-  // 🚀 ট্র্যাকিং ডিটেইলস এর কমন কম্পোনেন্ট (ডেস্কটপ ও মোবাইল উভয়ের জন্য)
   const renderTrackingDetails = () => (
     <>
       <div className="p-5 sm:p-6 pt-8 sm:pt-10 text-center border-b border-gray-100 dark:border-white/10 shrink-0 bg-[#f8fafc] dark:bg-[#141d1a] relative">
@@ -220,7 +291,6 @@ export default function CourierPage() {
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar space-y-6 sm:space-y-8 bg-white dark:bg-[#1a2421]">
-        {/* Customer Details */}
         <div>
           <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5 sm:mb-3">SHIPPING DETAILS</p>
           <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-3.5 sm:p-4 border border-gray-100 dark:border-white/5 space-y-2.5 sm:space-y-3 transition-colors">
@@ -240,7 +310,6 @@ export default function CourierPage() {
           </div>
         </div>
 
-        {/* Tracking Timeline */}
         <div>
           <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 sm:mb-4">TRACKING TIMELINE</p>
           <div className="space-y-0 pl-2">
@@ -264,7 +333,6 @@ export default function CourierPage() {
           </div>
         </div>
 
-        {/* Financial Details */}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-2">
           <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
             <h3 className="text-[9px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">DELIVERY CHARGE</h3>
@@ -306,7 +374,6 @@ export default function CourierPage() {
   return (
     <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6 font-sans transition-colors duration-300">
       
-      {/* ================= HEADER ================= */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-5 sm:mb-6 gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -316,44 +383,47 @@ export default function CourierPage() {
         </div>
         
         <div className="flex w-full lg:w-auto gap-2.5 sm:gap-3">
-          <button className="flex-1 lg:flex-none justify-center items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-slate-700 dark:text-gray-200 rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors flex">
-            <FileText size={16} /> <span className="hidden sm:inline">Print</span> Manifest
-          </button>
-          <button onClick={fetchCourierOrders} disabled={isSyncing} className="flex-1 lg:flex-none justify-center items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors disabled:opacity-70 flex">
+          <button onClick={handleForceSync} disabled={isSyncing} className="flex-1 lg:flex-none justify-center items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-lg text-xs sm:text-sm font-bold shadow-sm transition-colors disabled:opacity-70 flex">
             <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} /> Sync <span className="hidden sm:inline">Status</span>
           </button>
         </div>
       </div>
 
-      {/* ================= KPI CARDS (COMPACT FOR MOBILE) ================= */}
+      {/* ================= KPI CARDS (IN REVIEW, PENDING, DELIVERED, CANCELLED) ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
         {[
-          { label: "Dispatched", value: kpiDispatched, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
-          { label: "In Transit", value: kpiInTransit, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
-          { label: "Delivered", value: kpiDelivered, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
-          { label: "Returned", value: kpiReturned, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
-        ].map((kpi, idx) => (
-          <div key={idx} className="bg-white dark:bg-[#1a2421] p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex items-center justify-between transition-colors">
-            <div>
-              <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">{kpi.label}</p>
-              <h3 className={`text-lg sm:text-2xl font-bold ${kpi.color}`}>{kpi.value}</h3>
+          { key: "IN REVIEW", label: "IN REVIEW", value: kpiInReview, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
+          { key: "PENDING", label: "PENDING", value: kpiPending, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
+          { key: "DELIVERED", label: "DELIVERED", value: kpiDelivered, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+          { key: "CANCELLED", label: "CANCELLED", value: kpiCancelled, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
+        ].map((kpi, idx) => {
+          const isSelected = kpiFilter === kpi.key;
+          return (
+            <div 
+              key={idx} 
+              onClick={() => setKpiFilter(isSelected ? null : kpi.key)}
+              className={`bg-white dark:bg-[#1a2421] p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-2 cursor-pointer transition-all shadow-sm flex items-center justify-between ${
+                isSelected ? "border-[#3b82f6] ring-2 ring-blue-400/30 scale-[1.02]" : "border-gray-200 dark:border-white/10 hover:border-gray-300"
+              }`}
+            >
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">{kpi.label}</p>
+                <h3 className={`text-lg sm:text-2xl font-bold ${kpi.color}`}>{kpi.value}</h3>
+              </div>
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${kpi.bg} ${kpi.color}`}>
+                <Truck size={16} className="sm:w-5 sm:h-5" />
+              </div>
             </div>
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${kpi.bg} ${kpi.color}`}>
-              <Truck size={16} className="sm:w-5 sm:h-5" />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* ================= MAIN CONTENT GRID ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         
-        {/* ================= LEFT COLUMN: Parcel List ================= */}
         <div className="lg:col-span-7 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col overflow-hidden transition-colors h-[600px] lg:h-[75vh]">
           
           <div className="p-4 sm:p-5 shrink-0 space-y-3 sm:space-y-4 border-b border-gray-100 dark:border-white/5">
             
-            {/* Courier Tabs */}
             <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-lg sm:rounded-xl border border-gray-200 dark:border-white/10 shadow-sm overflow-x-auto custom-scrollbar">
               {["All", "Steadfast", "Pathao", "RedX"].map((tab) => (
                 <button 
@@ -368,9 +438,10 @@ export default function CourierPage() {
               ))}
             </div>
 
-            {/* List Header & Date Filters */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-3">
-              <h2 className="text-[15px] sm:text-[17px] font-bold text-slate-800 dark:text-white shrink-0">Parcel Tracking</h2>
+              <h2 className="text-[15px] sm:text-[17px] font-bold text-slate-800 dark:text-white shrink-0">
+                Parcel Tracking {kpiFilter ? `(${kpiFilter})` : ""}
+              </h2>
               
               <div className="flex items-center bg-gray-50 dark:bg-white/5 p-1 rounded-full border border-gray-200 dark:border-transparent shadow-sm overflow-x-auto w-full sm:w-auto custom-scrollbar">
                 {dateFilters.map((filter) => (
@@ -389,7 +460,6 @@ export default function CourierPage() {
               </div>
             </div>
 
-            {/* Search */}
             <div className="relative w-full pt-0.5">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
               <input 
@@ -402,7 +472,6 @@ export default function CourierPage() {
             </div>
           </div>
 
-          {/* List Scrollable Area */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-2.5 sm:space-y-3 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             {filteredParcels.length === 0 ? (
               <div className="text-center py-16 text-slate-400 flex flex-col items-center">
@@ -452,7 +521,6 @@ export default function CourierPage() {
           </div>
         </div>
 
-        {/* ================= RIGHT COLUMN: Tracking Details (DESKTOP ONLY) ================= */}
         <div className="hidden lg:flex lg:col-span-5 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex-col overflow-hidden relative transition-colors h-[75vh]">
           {!selectedParcel ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-gray-500 p-8 border-2 border-dashed border-gray-100 dark:border-white/5 m-6 rounded-2xl">
@@ -466,12 +534,10 @@ export default function CourierPage() {
 
       </div>
 
-      {/* ================= MOBILE DRAWER / MODAL FOR TRACKING DETAILS ================= */}
       {isMobileDrawerOpen && selectedParcel && (
         <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
             
-            {/* Close Button */}
             <button 
               onClick={() => setIsMobileDrawerOpen(false)} 
               className="absolute top-4 right-4 z-20 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition-colors"

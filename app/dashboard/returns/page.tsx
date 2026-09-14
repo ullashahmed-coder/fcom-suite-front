@@ -26,7 +26,6 @@ export default function ReturnsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   const fetchOrders = async () => {
-    setIsSyncing(true);
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`${apiUrl}/orders`, {
@@ -44,32 +43,34 @@ export default function ReturnsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const handleSyncSteadfast = async () => {
+  // 🚀 পেজে প্রবেশ করার সাথে সাথেই অটো-সিঙ্ক হয়ে লেটেস্ট রিটার্ন ডেটা নিয়ে আসবে
+  const syncAndFetchReturns = async () => {
     setIsSyncing(true);
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders/sync-steadfast-returns`, {
+      
+      // ১. ব্যাকএন্ডের সিঙ্ক এপিআই কল করে কুরিয়ার থেকে লেটেস্ট স্ট্যাটাস টেনে আনা
+      await fetch(`${apiUrl}/orders/sync-courier`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
 
-      if (res.ok) {
-        alert("✅ Steadfast থেকে সফলভাবে রিটার্ন ও পার্সিয়াল স্ট্যাটাস সিঙ্ক করা হয়েছে!");
-        await fetchOrders(); 
-      } else {
-        alert("⚠️ সিঙ্ক রিকোয়েস্ট গিয়েছে, তবে ব্যাকএন্ডে API সেটআপ নেই।");
-        await fetchOrders(); 
-      }
+      // ২. ডাটাবেস থেকে আপডেট ডেটা ফেচ করা
+      await fetchOrders();
     } catch (error) {
-      console.error("Sync error:", error);
-      alert("সার্ভার এরর! সিঙ্ক করা সম্ভব হয়নি।");
-    } finally {
+      console.error("Auto sync error:", error);
+      setIsLoading(false);
       setIsSyncing(false);
     }
+  };
+
+  useEffect(() => {
+    syncAndFetchReturns();
+  }, []);
+
+  const handleSyncSteadfast = async () => {
+    await syncAndFetchReturns();
+    alert("✅ Steadfast থেকে সফলভাবে রিটার্ন ও পার্সিয়াল স্ট্যাটাস সিঙ্ক করা হয়েছে!");
   };
 
   const pendingList = orders.filter(o => {
@@ -319,8 +320,6 @@ export default function ReturnsPage() {
                 restockedList.map((order) => {
                   const isSelected = selectedRestockedOrder?.id === order.id;
                   const firstItemImage = order.items?.[0]?.product?.imageUrl || order.items?.[0]?.product?.thumbnail;
-                  
-                  // 🚀 অরিজিনাল স্ট্যাটাস চেক (Partial নাকি Returned)
                   const isPartial = order.status?.toUpperCase().includes('PARTIAL');
 
                   return (
@@ -340,7 +339,6 @@ export default function ReturnsPage() {
                       <div className="flex flex-col items-end gap-1.5">
                         <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{formatDateTime(order.updatedAt || order.createdAt)}</span>
                         
-                        {/* 🚀 এখানে দুটো ব্যাজ পাশাপাশি দেখানো হচ্ছে */}
                         <div className="flex items-center gap-1.5">
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 uppercase border ${
                             isPartial 
@@ -382,7 +380,6 @@ export default function ReturnsPage() {
                     </span>
                   ) : (
                     <>
-                      {/* 🚀 ডানদিকের প্যানেলেও দুটো ব্যাজ পাশাপাশি দেখানো হচ্ছে */}
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 uppercase shadow-sm border ${
                         selectedRestockedOrder?.status?.toUpperCase().includes('PARTIAL')
                         ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'

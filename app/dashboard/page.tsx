@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import PlatformAnnouncement from "../components/PlatformAnnouncement";
-// (পাথটি আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী ঠিক করে নেবেন)
 
 import {
   DollarSign,
@@ -55,7 +54,6 @@ type DistrictSales = {
   colorClass: string;
 };
 
-// Tailwind color map
 const ICON_COLOR_STYLES: Record<string, string> = {
   emerald: "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400",
   blue: "bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400",
@@ -108,7 +106,7 @@ function Panel({
         {actionHref && (
           <Link
             href={actionHref}
-            className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 sm:px-0 sm:py-0 sm:bg-transparent rounded-md sm:rounded-none"
+            className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 sm:px-0 sm:py-0 sm:bg-transparent rounded-md sm:rounded-none"
           >
             {actionLabel}
           </Link>
@@ -128,7 +126,6 @@ function ThumbPlaceholder({ size = "w-6 h-6", rounded = "rounded" }: { size?: st
 export default function TenantDashboardHome() {
   const [loading, setLoading] = useState(true);
 
-  // States
   const [userName, setUserName] = useState("Loading...");
   const [userInitial, setUserInitial] = useState("U");
   const [userRole, setUserRole] = useState("ADMIN");
@@ -137,14 +134,11 @@ export default function TenantDashboardHome() {
   const [kpiStats, setKpiStats] = useState<any>(null);
   const [activityFeed, setActivityFeed] = useState<ActivityEntry[]>([]);
   const [teamStats, setTeamStats] = useState<TeamMember[]>([]);
-  
-  // 🚀 নতুন স্টেট: ডিস্ট্রিক্ট সেলস এর ডেটা রাখার জন্য
   const [districtSales, setDistrictSales] = useState<DistrictSales[]>([]);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   useEffect(() => {
-    // 1. LocalStorage Data
     const storedUser = localStorage.getItem("user");
     let dynamicUserName = "User";
     if (storedUser) {
@@ -155,96 +149,132 @@ export default function TenantDashboardHome() {
       setUserRole(parsedUser.role ? parsedUser.role.replace('_', ' ').toUpperCase() : "ADMIN");
     }
 
-    // 2. Fetch All Dashboard Data
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem("access_token");
         const headers = { "Authorization": `Bearer ${token}` };
 
-        // 👉 Fetch Products
-        const resProducts = await fetch(`${apiUrl}/products`, { headers });
-        if (resProducts.ok) setProducts(await resProducts.json());
+        // 👉 Fetch Products & Orders simultaneously to calculate actual Best Sellers
+        const [prodRes, orderRes] = await Promise.all([
+          fetch(`${apiUrl}/products`, { headers }),
+          fetch(`${apiUrl}/orders`, { headers })
+        ]);
 
-        // 👉 Fetch Team
-        try {
-           const resTeam = await fetch(`${apiUrl}/users`, { headers });
-           if (resTeam.ok) {
-             const usersData = await resTeam.json();
-             const formattedTeam = usersData.map((u: any) => ({
-                id: u.id,
-                initial: u.name ? u.name.charAt(0).toUpperCase() : "U",
-                name: u.name,
-                role: u.role ? u.role.replace('_', ' ').toUpperCase() : "USER",
-                tasks: 0 
-             }));
-             setTeamStats(formattedTeam);
-           }
-        } catch (e) {}
+        let allOrdersData: any[] = [];
 
-        // 🚀 Fetch Orders & Calculate KPIs & District Sales
-        try {
-           const resOrders = await fetch(`${apiUrl}/orders`, { headers });
-           if (resOrders.ok) {
-             const ordersData = await resOrders.json();
-             
-             // আজকের ডেট বের করা
-             const todayString = new Date().toDateString();
-             
-             // আজকের অর্ডার ফিল্টার করা
-             const todaysOrders = ordersData.filter((o: any) => {
-               if(!o.createdAt || o.isDeleted) return false;
-               return new Date(o.createdAt).toDateString() === todayString;
-             });
+        if (orderRes.ok) {
+          allOrdersData = await orderRes.json();
+          
+          const todayString = new Date().toDateString();
+          const todaysOrders = allOrdersData.filter((o: any) => {
+            if(!o.createdAt || o.isDeleted) return false;
+            return new Date(o.createdAt).toDateString() === todayString;
+          });
 
-             // সেলস এবং কাউন্ট বের করা
-             const salesToday = todaysOrders.reduce((sum: number, o: any) => {
-               const amount = Number(o.totalAmount) || Number(o.total) || Number(o.grandTotal) || Number(o.codAmount) || 0;
-               return sum + amount;
-             }, 0);
-             
-             const ordersCount = todaysOrders.length;
-             const pendingPacking = ordersData.filter((o: any) => !o.isDeleted && (o.status === 'NEW_ORDER' || o.status === 'PENDING')).length;
-             const pendingCourier = ordersData.filter((o: any) => !o.isDeleted && (o.status === 'PACKED' || o.status === 'READY_TO_SHIP' || o.status === 'COURIER_PENDING')).length;
+          const salesToday = todaysOrders.reduce((sum: number, o: any) => {
+            const amount = Number(o.totalAmount) || Number(o.total) || Number(o.grandTotal) || Number(o.codAmount) || 0;
+            return sum + amount;
+          }, 0);
+          
+          const ordersCount = todaysOrders.length;
+          const pendingPacking = allOrdersData.filter((o: any) => !o.isDeleted && (o.status === 'NEW_ORDER' || o.status === 'PENDING')).length;
+          const pendingCourier = allOrdersData.filter((o: any) => !o.isDeleted && (o.status === 'PACKED' || o.status === 'READY_TO_SHIP' || o.status === 'COURIER_PENDING')).length;
 
-             setKpiStats({
-               salesToday,
-               ordersToday: ordersCount,
-               pendingPacking,
-               pendingCourier,
-               returnsToday: 0
-             });
+          setKpiStats({
+            salesToday,
+            ordersToday: ordersCount,
+            pendingPacking,
+            pendingCourier,
+            returnsToday: 0
+          });
 
-             // 🚀 District Sales Calculation
-             const districtMap: Record<string, number> = {};
-             let totalSalesAllDistricts = 0;
-
-             ordersData.forEach((o: any) => {
-               if (!o.isDeleted && o.customer?.district) {
-                 const amount = Number(o.totalAmount) || Number(o.total) || 0;
-                 if (amount > 0) {
-                   const distName = o.customer.district.trim();
-                   districtMap[distName] = (districtMap[distName] || 0) + amount;
-                   totalSalesAllDistricts += amount;
+          // Team Task Counting
+          try {
+             const resTeam = await fetch(`${apiUrl}/users`, { headers });
+             if (resTeam.ok) {
+               const usersData = await resTeam.json();
+               const taskCounts: Record<string, number> = {};
+               allOrdersData.forEach((o: any) => {
+                 if (!o.isDeleted && o.user?.name) {
+                   taskCounts[o.user.name] = (taskCounts[o.user.name] || 0) + 1;
                  }
-               }
-             });
+               });
 
-             const districtColors = ["bg-emerald-500 dark:bg-emerald-400", "bg-blue-500 dark:bg-blue-400", "bg-purple-500 dark:bg-purple-400", "bg-amber-500 dark:bg-amber-400", "bg-rose-500 dark:bg-rose-400"];
-             
-             const districtArr = Object.entries(districtMap)
-               .map(([name, amount], idx) => ({
-                 id: idx,
-                 name,
-                 amount: amount as number,
-                 percent: totalSalesAllDistricts > 0 ? ((amount as number) / totalSalesAllDistricts) * 100 : 0,
-                 colorClass: districtColors[idx % districtColors.length]
-               }))
-               .sort((a, b) => b.amount - a.amount)
-               .slice(0, 5); // সেরা ৫টি ডিস্ট্রিক্ট
+               const formattedTeam = usersData.map((u: any) => ({
+                 id: u.id,
+                 initial: u.name ? u.name.charAt(0).toUpperCase() : "U",
+                 name: u.name,
+                 role: u.role ? u.role.replace('_', ' ').toUpperCase() : "USER",
+                 tasks: taskCounts[u.name] || 0
+               }));
+               setTeamStats(formattedTeam);
+             }
+          } catch (e) {}
 
-             setDistrictSales(districtArr);
-           }
-        } catch (e) { console.log("Orders KPI calculation failed.", e); }
+          // District Sales Calculation
+          const districtMap: Record<string, number> = {};
+          let totalSalesAllDistricts = 0;
+
+          allOrdersData.forEach((o: any) => {
+            if (!o.isDeleted && o.customer?.district) {
+              const amount = Number(o.totalAmount) || Number(o.total) || 0;
+              if (amount > 0) {
+                const distName = o.customer.district.trim();
+                districtMap[distName] = (districtMap[distName] || 0) + amount;
+                totalSalesAllDistricts += amount;
+              }
+            }
+          });
+
+          const districtColors = ["bg-emerald-500 dark:bg-emerald-400", "bg-blue-500 dark:bg-blue-400", "bg-purple-500 dark:bg-purple-400", "bg-amber-500 dark:bg-amber-400", "bg-rose-500 dark:bg-rose-400"];
+          
+          const districtArr = Object.entries(districtMap)
+            .map(([name, amount], idx) => ({
+              id: idx,
+              name,
+              amount: amount as number,
+              percent: totalSalesAllDistricts > 0 ? ((amount as number) / totalSalesAllDistricts) * 100 : 0,
+              colorClass: districtColors[idx % districtColors.length]
+            }))
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 5);
+
+          setDistrictSales(districtArr);
+        }
+
+        // 👉 Process Products with Order Sales to get True Best Sellers
+        if (prodRes.ok) {
+          const prods = await prodRes.json();
+          
+          const salesById: Record<string, number> = {};
+          const salesByName: Record<string, number> = {};
+
+          allOrdersData.forEach((order: any) => {
+            if (!order.isDeleted && order.items && Array.isArray(order.items)) {
+              order.items.forEach((item: any) => {
+                const qty = Number(item.quantity) || 1;
+                const pId = item.productId || item.product?.id || item.id;
+                if (pId) {
+                  salesById[String(pId)] = (salesById[String(pId)] || 0) + qty;
+                }
+                const pName = (item.product?.name || item.name || "").trim().toLowerCase();
+                if (pName) {
+                  salesByName[pName] = (salesByName[pName] || 0) + qty;
+                }
+              });
+            }
+          });
+
+          const sortedBestSellers = prods
+            .filter((p: any) => !p.isDeleted)
+            .map((p: any) => {
+              const sold = salesById[String(p.id)] || salesByName[(p.name || "").trim().toLowerCase()] || p.soldCount || 0;
+              return { ...p, soldCount: sold };
+            })
+            .sort((a: any, b: any) => b.soldCount - a.soldCount); // Top sold items first
+
+          setProducts(sortedBestSellers);
+        }
 
         // 👉 Fetch Activity Logs
         try {
@@ -276,7 +306,6 @@ export default function TenantDashboardHome() {
     fetchDashboardData();
   }, [apiUrl]);
 
-  // Stock calculations
   const lowStockItemsCount = products.filter((p) => p.stock <= LOW_STOCK_THRESHOLD).length;
   const immediateAttentionItems = products.filter((p) => p.stock === 0);
 
@@ -298,7 +327,7 @@ export default function TenantDashboardHome() {
       
       <PlatformAnnouncement />
       
-      {/* ================= KPI CARDS (Responsive Grid) ================= */}
+      {/* ================= KPI CARDS ================= */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {KPI_DATA.map((kpi) => {
           const Icon = kpi.icon;
@@ -317,34 +346,42 @@ export default function TenantDashboardHome() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         
         {/* ================= BEST SELLING PRODUCTS ================= */}
-        <Panel title="Best Selling Products" actionHref="/dashboard/products" className="lg:col-span-3">
+        <Panel title="Best Selling Products" actionHref="/dashboard/products/best-selling" className="lg:col-span-3">
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-500" size={24} /></div>
           ) : products.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-              {products.slice(0, 5).map((item, index) => (
-                <div key={item.id} className="border border-gray-100 dark:border-white/5 rounded-xl p-2.5 relative bg-slate-50 dark:bg-[#141d1a] transition-colors hover:shadow-sm">
-                  <span className="absolute -top-2 -left-2 w-5 h-5 bg-white dark:bg-[#1a2421] border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-10">
-                    {index + 1}
-                  </span>
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} alt={item.name} className="w-full h-24 sm:h-28 object-cover rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
-                  ) : (
-                    <ThumbPlaceholder size="w-full h-24 sm:h-28" rounded="rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
-                  )}
-                  <h4 className="text-[11px] sm:text-[13px] font-bold text-slate-800 dark:text-gray-200 mb-2 truncate">{item.name}</h4>
-                  <div className="flex justify-between items-end">
+              {products.slice(0, 5).map((item, index) => {
+                const totalSaleValue = (item.soldCount || 0) * (Number(item.price) || 0);
+
+                return (
+                  <div key={item.id} className="border border-gray-100 dark:border-white/5 rounded-xl p-2.5 relative bg-slate-50 dark:bg-[#141d1a] transition-colors hover:shadow-sm flex flex-col justify-between">
+                    <span className="absolute -top-2 -left-2 w-5 h-5 bg-white dark:bg-[#1a2421] border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm z-10">
+                      {index + 1}
+                    </span>
+                    
                     <div>
-                      <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">STOCK</p>
-                      <p className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-gray-300">{item.stock}</p>
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} alt={item.name} className="w-full h-24 sm:h-28 object-cover rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
+                      ) : (
+                        <ThumbPlaceholder size="w-full h-24 sm:h-28" rounded="rounded-lg mb-2 sm:mb-3 border border-gray-100 dark:border-white/5" />
+                      )}
+                      <h4 className="text-[11px] sm:text-[13px] font-bold text-slate-800 dark:text-gray-200 mb-2 truncate">{item.name}</h4>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">PRICE</p>
-                      <p className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400">{formatBDT(item.price)}</p>
+
+                    <div className="flex justify-between items-end pt-2 border-t border-gray-200/50 dark:border-white/5">
+                      <div>
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">SOLD</p>
+                        <p className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-gray-300">{item.soldCount || 0} Pcs</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">TOTAL SALE</p>
+                        <p className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400">{formatBDT(totalSaleValue)}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-10 text-gray-500 text-xs sm:text-sm">No products found. Add products to see best sellers.</div>
@@ -486,7 +523,7 @@ export default function TenantDashboardHome() {
                 </div>
                 <div className="text-right">
                   <h4 className="text-[12px] sm:text-[13px] font-black text-slate-800 dark:text-gray-200 leading-tight">{member.tasks}</h4>
-                  <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">TASKS</span>
+                  <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">ORDERS</span>
                 </div>
               </div>
             ))}

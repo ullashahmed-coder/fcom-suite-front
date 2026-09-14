@@ -16,6 +16,11 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
+  // 🚀 পাসওয়ার্ড চেঞ্জের জন্য নতুন স্টেট
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
   const [backupOptions, setBackupOptions] = useState({
     orders: true,
     products: true,
@@ -79,6 +84,45 @@ export default function SettingsPage() {
       console.error("Failed to fetch settings:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) {
+      alert("⚠️ বর্তমান এবং নতুন পাসওয়ার্ড দুটোই দিন!");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("⚠️ নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে!");
+      return;
+    }
+
+    setIsUpdatingPass(true);
+    try {
+      const token = localStorage.getItem("access_token") || localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/users/change-password`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert("✅ সফলভাবে পাসওয়ার্ড পরিবর্তন করা হয়েছে!");
+        setCurrentPassword("");
+        setNewPassword("");
+      } else {
+        alert(`❌ পরিবর্তন ব্যর্থ হয়েছে: ${data.message || "পুরনো পাসওয়ার্ড ভুল"}`);
+      }
+    } catch (error) {
+      console.error("Password change error:", error);
+      alert("সার্ভার এরর! পাসওয়ার্ড পরিবর্তন করা যায়নি।");
+    } finally {
+      setIsUpdatingPass(false);
     }
   };
 
@@ -734,23 +778,41 @@ export default function SettingsPage() {
               </div>
               
               <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
+                
+                {/* 🚀 ফিক্সড: পাসওয়ার্ড চেঞ্জ করার ফর্ম */}
                 <div>
                   <h3 className="text-[13px] sm:text-[14px] font-bold text-slate-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
                     <Key size={14} className="text-emerald-500 sm:w-[16px] sm:h-[16px]"/> Change Password
                   </h3>
-                  <div className="space-y-3 sm:space-y-4 max-w-md bg-slate-50 dark:bg-[#141d1a] p-4 sm:p-5 rounded-xl border border-slate-100 dark:border-white/5">
+                  <form onSubmit={handlePasswordChange} className="space-y-3 sm:space-y-4 max-w-md bg-slate-50 dark:bg-[#141d1a] p-4 sm:p-5 rounded-xl border border-slate-100 dark:border-white/5">
                      <div>
                        <label className="block text-[10px] sm:text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">Current Password</label>
-                       <input type="password" placeholder="Enter current password" className="w-full px-3.5 py-2 sm:py-2.5 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                       <input 
+                         type="password" 
+                         value={currentPassword}
+                         onChange={(e) => setCurrentPassword(e.target.value)}
+                         placeholder="Enter current password" 
+                         className="w-full px-3.5 py-2 sm:py-2.5 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" 
+                       />
                      </div>
                      <div>
                        <label className="block text-[10px] sm:text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">New Password</label>
-                       <input type="password" placeholder="Enter new password" className="w-full px-3.5 py-2 sm:py-2.5 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                       <input 
+                         type="password" 
+                         value={newPassword}
+                         onChange={(e) => setNewPassword(e.target.value)}
+                         placeholder="Enter new password" 
+                         className="w-full px-3.5 py-2 sm:py-2.5 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors" 
+                       />
                      </div>
-                     <button className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-lg text-xs sm:text-sm font-bold shadow-sm hover:bg-slate-700 dark:hover:bg-gray-100 transition-colors cursor-pointer mt-1 sm:mt-2">
-                        Update Password
+                     <button 
+                       type="submit"
+                       disabled={isUpdatingPass}
+                       className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-lg text-xs sm:text-sm font-bold shadow-sm hover:bg-slate-700 dark:hover:bg-gray-100 transition-colors cursor-pointer mt-1 sm:mt-2 disabled:opacity-50"
+                     >
+                       {isUpdatingPass ? "Updating..." : "Update Password"}
                      </button>
-                  </div>
+                  </form>
                 </div>
 
                 <div className="h-px w-full bg-gray-100 dark:bg-white/10"></div>

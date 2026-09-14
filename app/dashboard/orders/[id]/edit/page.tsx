@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Search, Plus, Trash2, ShoppingBag, User, MapPin, Phone, 
-  Loader2, Package, ArrowLeft, Receipt, Truck, Zap, Tag, CheckCircle2, AlertCircle, Save, 
-  Edit3, AlertTriangle, ClipboardEdit // 🚀 ফিক্স: ClipboardEdit ইমপোর্ট করা হয়েছে
+  Search, Plus, Minus, Trash2, ShoppingBag, User, MapPin, Phone, 
+  Loader2, Package, ArrowLeft, Receipt, Truck, Zap, Tag, CheckCircle2, AlertCircle, ShieldAlert, ArrowRight, Save, Edit3, ClipboardEdit
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
@@ -15,22 +14,16 @@ export default function EditOrderPage() {
   const orderId = params.id as string;
 
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [settings, setSettings] = useState({ insideDhaka: 60, outsideDhaka: 120, tangail: 80 });
   const [cart, setCart] = useState<any[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  
+  const [isLoading, setIsLoading] = useState(false);
   const [customDeliveryCharge, setCustomDeliveryCharge] = useState<number | string>("");
   const [discount, setDiscount] = useState<number | string>("");
-  const [steadfastNote, setSteadfastNote] = useState("");
-  const [isResellerOrder, setIsResellerOrder] = useState(false);
   const [orderNo, setOrderNo] = useState("");
-  
+
   const [orderStatus, setOrderStatus] = useState("");
   const [trackingCode, setTrackingCode] = useState("");
-  
-  // 🚀 Steadfast Warning Modal State
   const [showSteadfastWarning, setShowSteadfastWarning] = useState(false);
 
   const [customer, setCustomer] = useState({
@@ -43,33 +36,43 @@ export default function EditOrderPage() {
     isFullPaid: false,
   });
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  const [shippingRates, setShippingRates] = useState({
+    inside: 60,
+    outside: 120,
+    sub: 80,
+    subName: "Tangail City"
+  });
+
+  const [steadfastNote, setSteadfastNote] = useState("");
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        const res = await fetch(`${apiUrl}/settings`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setShippingRates({
+            inside: data.insideDhakaCharge || 60,
+            outside: data.outsideDhakaCharge || 120,
+            sub: data.subCityCharge || 80,
+            subName: data.subCityName || "Tangail City"
+          });
+        }
+      } catch (error) {
+        console.error("Settings fetch error:", error);
+      }
+    };
+    
     fetchSettings();
     fetchProducts();
     if (orderId) {
       fetchOrderDetails(orderId);
     }
   }, [orderId]);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch(`${apiUrl}/settings`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.insideDhaka) {
-          setSettings({
-            insideDhaka: Number(data.insideDhaka),
-            outsideDhaka: Number(data.outsideDhaka),
-            tangail: data.tangail ? Number(data.tangail) : 80
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch settings", err);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -83,7 +86,9 @@ export default function EditOrderPage() {
         setAvailableProducts(activeProducts);
       }
     } catch (err) {
-      console.error("Error fetching products", err);
+      console.error("সার্ভারের সাথে কানেক্ট করা যাচ্ছে না।", err);
+    } finally {
+      setLoadingProducts(false);
     }
   };
 
@@ -101,6 +106,9 @@ export default function EditOrderPage() {
         const savedDistrict = orderData.customer?.district || "";
         const displayDistrict = savedDistrict === "Custom Area" ? "Custom" : savedDistrict;
         
+        // 🚀 ফিক্সড: নোট চেক করে ইউরজেন্ট স্ট্যাটাস রিকভার করা হচ্ছে
+        const hasUrgentNote = orderData.courierNote?.includes("[URGENT]") || false;
+
         setCustomer({
           phone: orderData.customer?.phone || "",
           name: orderData.customer?.name || "",
@@ -108,10 +116,9 @@ export default function EditOrderPage() {
           address: orderData.customer?.address || "",
           note: orderData.note || "",
           advance: orderData.advance || 0,
-          isFullPaid: orderData.advance >= orderData.totalAmount,
+          isFullPaid: hasUrgentNote,
         });
 
-        setIsResellerOrder(orderData.customer?.isReseller || false);
         setDiscount(orderData.discount || "");
         setSteadfastNote(orderData.courierNote || "");
         setOrderStatus(orderData.status || "");
@@ -135,8 +142,6 @@ export default function EditOrderPage() {
       }
     } catch (err) {
       console.error("Failed to fetch order", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -167,10 +172,9 @@ export default function EditOrderPage() {
 
   const updateCartQty = (id: string, newQty: number) => {
     if (newQty < 1) return;
-    const product = availableProducts.find(p => p.id === id) || cart.find(c => c.id === id); 
-    
-    if (product && newQty > (product.stock + (cart.find(c => c.id === id)?.qty || 0))) {
-       alert(`দুঃখিত, স্টকে পর্যাপ্ত পরিমাণ নেই।`);
+    const product = availableProducts.find(p => p.id === id) || cart.find(c => c.id === id);
+    if (product && newQty > product.stock) {
+       alert(`দুঃখিত, স্টকে সর্বোচ্চ ${product.stock} টি শাড়ি আছে।`);
        return;
     }
     setCart(cart.map(item => item.id === id ? { ...item, qty: newQty } : item));
@@ -182,11 +186,16 @@ export default function EditOrderPage() {
     input = input.replace(/[০-৯]/g, (match) => banglaDigits.indexOf(match).toString());
     input = input.replace(/[^0-9+]/g, '');
 
-    if (input.startsWith('+88')) input = input.substring(3);
-    else if (input.startsWith('88')) input = input.substring(2);
+    if (input.startsWith('+88')) {
+      input = input.substring(3);
+    } else if (input.startsWith('88')) {
+      input = input.substring(2);
+    }
 
     input = input.replace(/[^0-9]/g, '');
-    if (input.length > 11) input = input.substring(0, 11);
+    if (input.length > 11) {
+      input = input.substring(0, 11);
+    }
 
     setCustomer({ ...customer, phone: input });
   };
@@ -194,28 +203,64 @@ export default function EditOrderPage() {
   const isPhoneValid = customer.phone.length === 11 && customer.phone.startsWith("01");
 
   let deliveryCharge = 0;
-  if (customer.district === "Inside Dhaka") deliveryCharge = settings.insideDhaka;
-  else if (customer.district === "Outside Dhaka") deliveryCharge = settings.outsideDhaka;
-  else if (customer.district === "Tangail City") deliveryCharge = settings.tangail;
-  else if (customer.district === "Custom") deliveryCharge = Number(customDeliveryCharge) || 0;
+  if (customer.district === "Inside Dhaka") {
+    deliveryCharge = shippingRates.inside;
+  } else if (customer.district === "Outside Dhaka") {
+    deliveryCharge = shippingRates.outside;
+  } else if (customer.district === shippingRates.subName) {
+    deliveryCharge = shippingRates.sub;
+  } else if (customer.district === "Custom") {
+    deliveryCharge = Number(customDeliveryCharge) || 0;
+  }
   
   const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0);
   const discountAmount = Number(discount) || 0;
+  
   const totalAmount = (subtotal + deliveryCharge) - discountAmount;
   const advanceAmount = Math.min(Number(customer.advance) || 0, totalAmount);
   const dueAmount = totalAmount - advanceAmount;
 
+  // 🚀 ইউরজেন্ট নোট হ্যান্ডলিং
+  useEffect(() => {
+    let charge = deliveryCharge > 0 ? deliveryCharge : 100;
+    let noteText = steadfastNote.replace(" [URGENT]", "");
+
+    if (customer.isFullPaid) {
+      if (!noteText.includes("[URGENT]")) {
+        noteText += " [URGENT]";
+      }
+    }
+
+    setSteadfastNote(noteText);
+  }, [customer.isFullPaid]);
+
   const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isSaving) return;
+    if (isLoading) return;
 
-    if (!isPhoneValid) { alert("দয়া করে ১১ ডিজিটের সঠিক মোবাইল নম্বর দিন।"); return; }
-    if (!customer.name || !customer.district) { alert("দয়া করে কাস্টমারের নাম এবং জেলা সিলেক্ট করুন।"); return; }
-    if (customer.district === "Custom" && customDeliveryCharge === "") { alert("দয়া করে কাস্টম ডেলিভারি চার্জটি লিখুন।"); return; }
-    if (cart.length === 0) { alert("অর্ডার আপডেট করার জন্য অন্তত একটি শাড়ি কার্টে রাখুন।"); return; }
+    if (!isPhoneValid) { 
+      alert("দয়া করে ১১ ডিজিটের সঠিক মোবাইল নম্বর (যেমন: 01XXXXXXXXX) দিন।"); 
+      return; 
+    }
+    if (!customer.name || !customer.district) { 
+      alert("দয়া করে কাস্টমারের নাম এবং জেলা সিলেক্ট করুন।"); 
+      return; 
+    }
+    if (customer.district === "Custom" && customDeliveryCharge === "") { 
+      alert("দয়া করে কাস্টম ডেলিভারি চার্জটি লিখুন।"); 
+      return; 
+    }
+    if (cart.length === 0) { 
+      alert("অর্ডার আপডেট করার জন্য অন্তত একটি শাড়ি কার্টে রাখুন।"); 
+      return; 
+    }
+    if (discountAmount > (subtotal + deliveryCharge)) {
+      alert("ডিসকাউন্ট অ্যামাউন্ট মোট বিলের চেয়ে বেশি হতে পারবে না!");
+      return;
+    }
 
-    setIsSaving(true);
+    setIsLoading(true);
 
     const updatePayload = {
       customerName: customer.name,
@@ -227,7 +272,6 @@ export default function EditOrderPage() {
       advancePayment: advanceAmount,
       deliveryCharge: deliveryCharge,
       discount: discountAmount,
-      isResellerOrder: isResellerOrder,
       items: cart.map(item => ({
         productId: item.id,
         quantity: item.qty,
@@ -261,7 +305,7 @@ export default function EditOrderPage() {
       console.error(error);
       alert("সার্ভার এরর।");
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
     }
   };
 
@@ -273,21 +317,17 @@ export default function EditOrderPage() {
     );
   });
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc] dark:bg-[#0f1714]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
-  }
-
   return (
-    <div className="space-y-6 pb-10 max-w-[1400px] mx-auto transition-colors relative">
+    <div className="space-y-4 pb-28 xl:pb-10 max-w-[1400px] mx-auto transition-colors relative">
 
       {/* ================= Page Header ================= */}
       <div className="flex items-center gap-4 pb-4 border-b border-slate-200 dark:border-white/5">
-        <button
-          onClick={() => router.back()}
-          className="p-2.5 bg-white dark:bg-[#1a2421] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl transition-all shadow-sm cursor-pointer"
+        <Link
+          href="/dashboard/orders"
+          className="p-2.5 bg-white dark:bg-[#1a2421] border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 hover:text-[#7A1B38] dark:hover:text-[#7A1B38] rounded-xl transition-all shadow-sm"
         >
           <ArrowLeft size={20} />
-        </button>
+        </Link>
         <div className="w-11 h-11 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center shrink-0">
           <Edit3 size={22} />
         </div>
@@ -299,86 +339,94 @@ export default function EditOrderPage() {
 
       <form onSubmit={handleUpdateOrder} className="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
-        {/* ================= LEFT COLUMN ================= */}
-        <div className="xl:col-span-8 space-y-6">
-
-          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-6 transition-colors">
+        {/* ================= LEFT COLUMN: PRODUCTS ================= */}
+        <div className="xl:col-span-8 order-1 space-y-4">
+          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 md:p-6 transition-colors">
             <h2 className="text-base font-bold text-slate-800 dark:text-white mb-4">Select Products to Add/Edit</h2>
 
-            <div className="relative mb-6">
+            <div className="relative mb-4">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search size={16} className="text-slate-400 dark:text-gray-500" /></div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-[#141d1a] border border-slate-200 dark:border-white/5 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-[#202b27] border border-slate-300 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] transition-colors"
                 placeholder="Search by product name, SKU..."
               />
             </div>
 
-            {filteredProducts.length === 0 ? (
-              <div className="py-12 flex flex-col items-center justify-center text-slate-500 dark:text-gray-400 gap-3 border-2 border-dashed border-slate-100 dark:border-white/5 rounded-xl">
+            {loadingProducts ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-500 dark:text-gray-400 gap-3">
+                <Loader2 className="animate-spin text-[#7A1B38]" size={32} />
+                <p className="text-sm font-medium">লোড হচ্ছে...</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-500 dark:text-gray-400 gap-3 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-xl">
                 <Package size={48} className="text-slate-300 dark:text-gray-600" />
                 <p className="text-sm font-medium">কোনো শাড়ি পাওয়া যায়নি!</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 h-[300px] overflow-y-auto custom-scrollbar pr-1 sm:pr-2">
-                {filteredProducts.map((product) => {
-                  const qtyInCart = cart.find(c => c.id === product.id)?.qty || 0;
-                  const availableNow = product.stock - qtyInCart; 
+              <div className="max-h-[450px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
+                  {filteredProducts.map((product) => {
+                    const qtyInCart = cart.find(c => c.id === product.id)?.qty || 0;
+                    const availableNow = product.stock - qtyInCart;
 
-                  return (
-                    <div key={product.id} className="border border-slate-100 dark:border-white/5 rounded-xl p-2 sm:p-3 hover:border-blue-200 dark:hover:border-blue-500/30 transition-all group bg-slate-50 dark:bg-[#141d1a] flex flex-col">
-                      <div className="w-full h-28 sm:h-36 bg-[#F1F5F9] dark:bg-white/5 rounded-lg overflow-hidden flex items-center justify-center mb-2 sm:mb-3">
-                        {getProductImage(product) ? (
-                          <img src={getProductImage(product)} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        ) : (
-                          <Package className="text-slate-300 dark:text-gray-600" size={32} />
-                        )}
-                      </div>
-
-                      <div className="space-y-1 mb-2">
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-gray-500 font-medium uppercase">SKU: {product.sku || 'N/A'}</p>
-                        <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-gray-100 line-clamp-2">{product.name}</h3>
-                      </div>
-                      <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-white/5">
-                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-gray-100">৳ {product.price}</span>
+                    return (
+                      <div key={product.id} className="border border-slate-200 dark:border-white/10 rounded-xl p-2.5 hover:border-[#7A1B38]/50 hover:shadow-sm transition-all group bg-slate-50 dark:bg-[#202b27] flex flex-col">
                         
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className={`text-[8px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded ${availableNow > 0 ? 'text-green-600 dark:text-emerald-400 bg-green-50 dark:bg-emerald-500/10' : 'text-red-600 dark:text-rose-400 bg-red-50 dark:bg-rose-500/10'}`}>
-                            {availableNow > 0 ? `${availableNow} In Stock` : 'Out'}
+                        <div className="w-full h-38 bg-white dark:bg-[#1a2421] rounded-lg overflow-hidden flex items-center justify-center mb-2.5 relative shrink-0">
+                          {getProductImage(product) ? (
+                            <img 
+                              src={getProductImage(product)} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                            />
+                          ) : (
+                            <Package className="text-slate-300 dark:text-gray-600" size={28} />
+                          )}
+                          <span className={`absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm ${availableNow > 0 ? 'text-green-700 bg-green-100/90' : 'text-red-700 bg-red-100/90'}`}>
+                            {availableNow > 0 ? `${availableNow} In` : 'Out'}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => addToCart(product)}
-                            className="w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center transition-colors shrink-0 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                          >
-                            <Plus size={14} className="sm:w-[16px] sm:h-[16px]" />
-                          </button>
                         </div>
 
+                        <div className="flex flex-col">
+                          <p className="text-[10px] text-slate-400 dark:text-gray-500 font-medium uppercase leading-none mb-1.5">SKU: {product.sku || 'N/A'}</p>
+                          <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-gray-100 line-clamp-2 leading-tight mb-2">{product.name}</h3>
+                          
+                          <div className="flex items-center justify-between pt-2.5 border-t border-slate-200 dark:border-white/5">
+                            <span className="text-sm font-extrabold text-[#7A1B38] dark:text-rose-400">৳{product.price}</span>
+                            <button
+                              type="button"
+                              onClick={() => addToCart(product)}
+                              disabled={availableNow <= 0}
+                              className={`w-7 h-7 rounded flex items-center justify-center transition-colors shrink-0 ${availableNow > 0 ? 'bg-[#7A1B38] hover:bg-rose-900 text-white shadow-sm' : 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-gray-600 cursor-not-allowed'}`}
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-6 transition-colors">
-            <h2 className="text-base font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-              <ShoppingBag size={18} className="text-blue-600 dark:text-blue-400" /> Order Items ({cart.length})
-            </h2>
+          {/* Cart Section with +/- Buttons */}
+          {cart.length > 0 && (
+            <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 md:p-6 transition-colors">
+              <h2 className="text-base font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                <ShoppingBag size={18} className="text-[#7A1B38]" /> Selected Products ({cart.length})
+              </h2>
 
-            {cart.length === 0 ? (
-              <div className="text-center py-10 text-slate-400 dark:text-gray-500 text-sm border-2 border-dashed border-slate-100 dark:border-white/5 rounded-xl">কার্টে কোনো আইটেম নেই</div>
-            ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {cart.map((item) => (
-                  <div key={item.id} className="flex flex-wrap sm:flex-nowrap items-center justify-between p-3 border border-slate-100 dark:border-white/5 rounded-lg bg-slate-50 dark:bg-[#141d1a] gap-4 transition-colors">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-white dark:bg-[#1a2421] rounded border border-slate-200 dark:border-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                  <div key={item.id} className="flex flex-wrap sm:flex-nowrap items-center justify-between p-2.5 border border-slate-200 dark:border-white/10 rounded-xl bg-slate-50 dark:bg-[#202b27] gap-3 transition-colors">
+                    
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-12 h-12 bg-white dark:bg-[#1a2421] rounded flex items-center justify-center overflow-hidden shrink-0 border border-slate-200 dark:border-white/5">
                         {getProductImage(item) ? (
                           <img src={getProductImage(item)} alt={item.name} className="w-full h-full object-cover" />
                         ) : (
@@ -386,37 +434,51 @@ export default function EditOrderPage() {
                         )}
                       </div>
                       <div className="overflow-hidden">
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-white truncate w-40 md:w-full">{item.name}</h4>
-                        <p className="text-xs text-slate-500 dark:text-gray-400">৳ {item.price}</p>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-white truncate">{item.name}</h4>
+                        <p className="text-xs font-medium text-slate-500 dark:text-gray-400 mt-0.5">৳{item.price}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 md:gap-6 shrink-0">
-                      <div className="flex items-center border border-slate-200 dark:border-white/5 bg-white dark:bg-[#1a2421] rounded-lg overflow-hidden">
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={(e) => updateCartQty(item.id, Number(e.target.value))}
-                          className="w-14 text-center py-1 text-sm outline-none font-bold text-slate-800 dark:text-white bg-transparent"
-                        />
+                    <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-200 dark:border-transparent sm:border-t-0">
+                      <div className="flex items-center gap-1 bg-white dark:bg-[#141d1a] border border-slate-300 dark:border-white/10 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(item.id, item.qty - 1)}
+                          disabled={item.qty <= 1}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50 transition-colors"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="w-8 text-center text-sm font-bold text-slate-800 dark:text-white">
+                          {item.qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(item.id, item.qty + 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
                       </div>
-                      <span className="text-sm font-bold text-[#7A1B38] dark:text-rose-400 w-16 text-right">৳ {Number(item.price) * item.qty}</span>
-                      <button type="button" onClick={() => removeFromCart(item.id)} className="text-slate-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 p-1.5 bg-white dark:bg-white/5 rounded border border-slate-200 dark:border-transparent transition-colors cursor-pointer"><Trash2 size={16} /></button>
+
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-[#7A1B38] dark:text-rose-400 w-16 text-right">৳{Number(item.price) * item.qty}</span>
+                        <button type="button" onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 p-1.5 bg-white dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/5 shadow-sm transition-colors"><Trash2 size={16} /></button>
+                      </div>
                     </div>
+
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* ================= RIGHT COLUMN ================= */}
-        <div className="xl:col-span-4 space-y-6">
-
-          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-6 transition-colors">
-            <h2 className="text-base font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2">
-              <User size={18} className="text-blue-600 dark:text-blue-400" /> Customer Details
+        {/* ================= RIGHT COLUMN: CUSTOMER DETAILS ================= */}
+        <div className="xl:col-span-4 order-2 space-y-4">
+          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 md:p-6 transition-colors">
+            <h2 className="text-base font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+              <User size={18} className="text-[#7A1B38]" /> Customer Details
             </h2>
 
             <div className="space-y-4">
@@ -429,15 +491,16 @@ export default function EditOrderPage() {
                     required
                     value={customer.phone}
                     onChange={handlePhoneChange}
-                    className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm outline-none transition-colors bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 ${customer.phone.length > 0 && !isPhoneValid
-                      ? 'border-rose-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-rose-700'
-                      : 'border-slate-200 dark:border-white/5 focus:border-blue-600 focus:ring-1 focus:ring-blue-600'
+                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm outline-none transition-colors dark:bg-[#202b27] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 ${customer.phone.length > 0 && !isPhoneValid
+                      ? 'border-rose-400 bg-rose-50 dark:bg-rose-500/10 focus:border-rose-500 focus:ring-1 text-rose-700 dark:text-rose-400'
+                      : 'border-slate-300 dark:border-white/10 focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] bg-slate-50'
                       }`}
+                    placeholder="e.g., 01XXXXXXXXX"
                   />
                 </div>
                 {customer.phone.length > 0 && !isPhoneValid && (
                   <p className="text-[10px] text-rose-500 dark:text-rose-400 font-bold flex items-center gap-1 mt-1">
-                    <AlertCircle size={10} /> ফোন নম্বর অবশ্যই ১১ ডিজিটের হতে হবে এবং 01 দিয়ে শুরু হতে হবে।
+                    <AlertCircle size={10} /> ফোন নম্বর ১১ ডিজিটের এবং 01 দিয়ে শুরু হতে হবে।
                   </p>
                 )}
               </div>
@@ -451,7 +514,8 @@ export default function EditOrderPage() {
                     required
                     value={customer.name}
                     onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white placeholder-slate-400 border border-slate-200 dark:border-white/5 rounded-lg text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-[#202b27] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-slate-300 dark:border-white/10 rounded-lg text-sm focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] outline-none transition-colors"
+                    placeholder="e.g., Farida Akter"
                   />
                 </div>
               </div>
@@ -464,29 +528,30 @@ export default function EditOrderPage() {
                     required
                     value={customer.district}
                     onChange={(e) => setCustomer({ ...customer, district: e.target.value })}
-                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white border border-slate-200 dark:border-white/5 rounded-lg text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none appearance-none"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-[#202b27] text-slate-800 dark:text-white border border-slate-300 dark:border-white/10 rounded-lg text-sm focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] outline-none appearance-none transition-colors"
                   >
                     <option value="">Select Delivery Area</option>
-                    <option value="Inside Dhaka">Inside Dhaka (৳ {settings.insideDhaka})</option>
-                    <option value="Outside Dhaka">Outside Dhaka (৳ {settings.outsideDhaka})</option>
-                    <option value="Tangail City">Tangail City (৳ {settings.tangail})</option>
+                    <option value="Inside Dhaka">Inside Dhaka (৳ {shippingRates.inside})</option>
+                    <option value="Outside Dhaka">Outside Dhaka (৳ {shippingRates.outside})</option>
+                    <option value={shippingRates.subName}>{shippingRates.subName} (৳ {shippingRates.sub})</option>
                     <option value="Custom">Custom Charge</option>
                   </select>
                 </div>
               </div>
 
               {customer.district === "Custom" && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
                   <label className="text-xs font-bold text-rose-600 dark:text-rose-400">Custom Delivery Charge *</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2 text-slate-500 font-bold">৳</span>
+                    <span className="absolute left-3 top-2.5 text-slate-500 dark:text-gray-400 font-bold">৳</span>
                     <input
                       type="number"
                       required
                       min="0"
                       value={customDeliveryCharge}
                       onChange={(e) => setCustomDeliveryCharge(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-rose-50 dark:bg-rose-500/10 text-slate-800 dark:text-white border border-rose-200 dark:border-rose-500/30 rounded-lg text-sm focus:border-rose-500 outline-none"
+                      className="w-full pl-8 pr-3 py-2.5 bg-rose-50 dark:bg-rose-500/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-rose-200 dark:border-rose-500/30 rounded-lg text-sm focus:border-rose-500 focus:ring-1 focus:ring-rose-500 outline-none transition-colors"
+                      placeholder="e.g. 150"
                     />
                   </div>
                 </div>
@@ -499,44 +564,48 @@ export default function EditOrderPage() {
                   rows={2}
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                  className="w-full p-3 bg-white dark:bg-[#141d1a] text-slate-800 dark:text-white border border-slate-200 dark:border-white/5 rounded-lg text-sm focus:border-blue-600 outline-none resize-none"
+                  className="w-full p-3 bg-slate-50 dark:bg-[#202b27] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-slate-300 dark:border-white/10 rounded-lg text-sm focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] outline-none resize-none transition-colors"
                   placeholder="Full address for delivery..."
                 ></textarea>
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5">
-                <label className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                  <Tag size={14} /> Extra Discount
-                </label>
+              <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-white/5 transition-colors">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                    <Tag size={14} className="fill-blue-100 dark:fill-blue-900" /> Extra Discount
+                  </label>
+                </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-blue-600 dark:text-blue-400 font-bold">৳</span>
+                  <span className="absolute left-3 top-2.5 text-blue-600 dark:text-blue-400 font-bold">৳</span>
                   <input
                     type="number"
                     min="0"
                     value={discount}
                     onChange={(e) => setDiscount(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 bg-blue-50/50 dark:bg-blue-500/10 text-slate-800 dark:text-white border border-blue-200 dark:border-blue-500/30 rounded-lg text-sm focus:border-blue-500 outline-none"
+                    className="w-full pl-8 pr-3 py-2.5 bg-blue-50/50 dark:bg-blue-500/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-blue-200 dark:border-blue-500/30 rounded-lg text-sm focus:border-blue-500 outline-none transition-colors"
+                    placeholder="e.g. 100"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-white/5">
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100 dark:border-white/5 transition-colors">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Advance Payment</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2 text-emerald-600 dark:text-emerald-400 font-bold">৳</span>
+                    <span className="absolute left-3 top-2.5 text-emerald-600 dark:text-emerald-400 font-bold">৳</span>
                     <input
                       type="number"
                       min="0"
                       value={customer.advance || ""}
                       onChange={(e) => setCustomer({ ...customer, advance: Number(e.target.value) })}
-                      className="w-full pl-8 pr-3 py-2 bg-emerald-50/30 dark:bg-emerald-500/10 text-slate-800 dark:text-white border border-emerald-200 dark:border-emerald-500/30 rounded-lg text-sm focus:border-emerald-500 outline-none"
+                      className="w-full pl-8 pr-3 py-2.5 bg-emerald-50/30 dark:bg-emerald-500/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-emerald-200 dark:border-emerald-500/30 rounded-lg text-sm focus:border-emerald-500 outline-none transition-colors"
+                      placeholder="e.g. 500"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col justify-center pt-5">
-                  <label className="flex items-center gap-2 text-xs font-bold text-rose-600 dark:text-rose-400 cursor-pointer p-2 border border-rose-100 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors">
+                  <label className="flex items-center justify-center gap-2 text-xs font-bold text-rose-600 dark:text-rose-400 cursor-pointer p-2.5 border border-rose-100 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors">
                     <input
                       type="checkbox"
                       checked={customer.isFullPaid}
@@ -544,17 +613,18 @@ export default function EditOrderPage() {
                       className="accent-rose-600 dark:accent-rose-500 w-4 h-4 rounded cursor-pointer"
                     />
                     <div className="flex items-center gap-1">
-                      <Zap size={14} className="fill-rose-600 dark:fill-rose-500" /> Make Urgent
+                      <Zap size={14} className="fill-rose-600 dark:fill-rose-500" /> Urgent
                     </div>
                   </label>
                 </div>
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5 transition-colors">
+              {/* NOTES SECTION */}
+              <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-white/5 transition-colors">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-600 dark:text-gray-300 flex items-center gap-1">
                     <ClipboardEdit size={14} className="text-amber-600 dark:text-amber-500" />
-                    Special Note (Only for Packing Team)
+                    Special Note (Packing Team)
                   </label>
                   <button type="button" onClick={() => setCustomer({ ...customer, note: "" })} className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300">Clear</button>
                 </div>
@@ -567,7 +637,7 @@ export default function EditOrderPage() {
                 ></textarea>
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-white/5 transition-colors">
+              <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-white/5 transition-colors">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
                     <Truck size={14} />
@@ -583,12 +653,13 @@ export default function EditOrderPage() {
                   placeholder="কুরিয়ারের জন্য স্পেশাল ইনস্ট্রাকশন..."
                 ></textarea>
               </div>
+
             </div>
           </div>
 
-          {/* Order Summary */}
-          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-6 sticky top-6 transition-colors">
-            <h2 className="text-base font-bold text-slate-800 dark:text-white mb-5 flex items-center gap-2">
+          {/* ================= Order Summary ================= */}
+          <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 md:p-6 transition-colors xl:sticky xl:top-6">
+            <h2 className="text-base font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
               <Receipt size={18} className="text-[#7A1B38]" /> Order Summary
             </h2>
 
@@ -601,37 +672,60 @@ export default function EditOrderPage() {
                 <span>Delivery Charge</span>
                 <span className="font-bold text-slate-800 dark:text-white">+ ৳ {deliveryCharge}</span>
               </div>
+
               {discountAmount > 0 && (
                 <div className="flex justify-between text-blue-600 dark:text-blue-400 items-center">
                   <span>Discount</span>
                   <span className="font-bold">- ৳ {discountAmount}</span>
                 </div>
               )}
-              <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex justify-between text-slate-600 dark:text-gray-400">
+
+              <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex justify-between text-slate-600 dark:text-gray-400 transition-colors">
                 <span>Advance Payment</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">- ৳ {advanceAmount}</span>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-slate-100 dark:border-white/5 flex justify-between items-center bg-blue-50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/30">
-                <span className="text-sm font-bold text-blue-900 dark:text-blue-400">Due Amount (COD)</span>
-                <span className="text-xl font-black text-blue-600 dark:text-blue-400">৳ {dueAmount > 0 ? dueAmount : 0}</span>
+              <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex justify-between items-center bg-rose-50 dark:bg-rose-500/10 p-3 rounded-xl border border-rose-100 dark:border-rose-500/30 transition-colors">
+                <span className="text-sm font-bold text-rose-900 dark:text-rose-400">Due (COD)</span>
+                <span className="text-xl font-black text-[#7A1B38] dark:text-rose-400">৳ {dueAmount > 0 ? dueAmount : 0}</span>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={cart.length === 0 || isSaving || !isPhoneValid}
-              className={`w-full mt-6 py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${cart.length > 0 && !isSaving && isPhoneValid
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20 dark:shadow-none cursor-pointer'
-                : 'bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed'
-                }`}
-            >
-              {isSaving ? <Loader2 size={20} className="animate-spin" /> : <><Save size={18}/> Update Order</>}
-            </button>
+            <div className="hidden xl:block mt-6">
+              <button
+                type="submit"
+                disabled={cart.length === 0 || isLoading || !isPhoneValid}
+                className={`w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${cart.length > 0 && !isLoading && isPhoneValid
+                  ? 'bg-[#7A1B38] hover:bg-rose-900 text-white shadow-lg shadow-rose-900/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-gray-600 cursor-not-allowed'
+                  }`}
+              >
+                {isLoading ? <Loader2 size={20} className="animate-spin" /> : <><Save size={18}/> Update Order</>}
+              </button>
+            </div>
           </div>
-
         </div>
+
       </form>
+
+      {/* ================= 🚀 FLOATING ACTION BUTTON (FAB) FOR MOBILE ================= */}
+      <div className="xl:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-[#1a2421]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-40 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)]">
+        <button
+          type="submit"
+          onClick={handleUpdateOrder}
+          disabled={cart.length === 0 || isLoading || !isPhoneValid}
+          className={`w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${cart.length > 0 && !isLoading && isPhoneValid
+            ? 'bg-[#7A1B38] hover:bg-rose-900 text-white shadow-lg shadow-rose-900/20 dark:shadow-none'
+            : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-gray-600 cursor-not-allowed'
+            }`}
+        >
+          {isLoading ? <Loader2 size={20} className="animate-spin" /> : (
+            <>
+              Update Order <span className="mx-1">•</span> ৳ {dueAmount > 0 ? dueAmount : 0}
+            </>
+          )}
+        </button>
+      </div>
 
       {/* ================= STEADFAST MANUAL UPDATE WARNING MODAL ================= */}
       {showSteadfastWarning && (
@@ -639,7 +733,7 @@ export default function EditOrderPage() {
           <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl border border-amber-200 dark:border-amber-500/20 overflow-hidden p-6 text-center">
             
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-              <AlertTriangle size={32} />
+              <ShieldAlert size={32} />
             </div>
 
             <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-2">

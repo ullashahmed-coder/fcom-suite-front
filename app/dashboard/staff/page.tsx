@@ -346,8 +346,7 @@ export default function StaffPayrollPage() {
           <p className="text-[11px] sm:text-sm font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 sm:mt-1 uppercase tracking-wider">{selectedStaff.role}</p>
         </div>
         
-        {/* 🚀 ফিক্স: Height Auto করা হয়েছে, কোনো overflow বা ফিক্সড হাইট নেই */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex-1 p-4 sm:p-6 space-y-4 sm:space-y-6">
           <div>
             <div className="flex justify-between items-center mb-2.5 sm:mb-3">
               <h3 className="text-[11px] sm:text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Order Performance</h3>
@@ -454,7 +453,7 @@ export default function StaffPayrollPage() {
         </div>
         
         <div className="w-full sm:w-auto">
-          {/* 🚀 Dynamic Bulk Payment Button */}
+          {/* Dynamic Bulk Payment Button */}
           <button 
             onClick={() => setIsBulkModalOpen(true)}
             disabled={!isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0}
@@ -497,7 +496,7 @@ export default function StaffPayrollPage() {
         ))}
       </div>
 
-      {/* ================= MAIN CONTENT GRID (🚀 h-auto for Natural Height & Scrolling) ================= */}
+      {/* ================= MAIN CONTENT GRID (🚀 h-auto for Auto-expanding height) ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
         
         {/* ================= LEFT COLUMN ================= */}
@@ -505,6 +504,7 @@ export default function StaffPayrollPage() {
           
           <div className="p-4 sm:p-5 shrink-0 space-y-3 sm:space-y-4 border-b border-gray-100 dark:border-white/5">
             <div className="flex flex-col gap-3">
+              
               {/* 🚀 Tabs */}
               <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm w-full">
                 <button 
@@ -521,11 +521,23 @@ export default function StaffPayrollPage() {
                     activeTab === "history" ? "text-emerald-600 dark:text-emerald-400 bg-white dark:bg-[#1a2421] shadow-sm border border-gray-200 dark:border-white/10" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent"
                   }`}
                 >
-                  <FileText size={16} className="sm:w-[18px] sm:h-[18px]"/> History
+                  <FileText size={16} className="sm:w-[18px] sm:h-[18px]"/> Payment History
                 </button>
               </div>
+
+              {/* 🚀 Search Box (Now on Top) */}
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={activeTab === "directory" ? "Search staff by name or role..." : "Search payroll by ID or Employee..."}
+                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
               
-              {/* 🚀 Date Filter (Only for Directory) */}
+              {/* 🚀 Date Filter (Now at the Bottom) */}
               {activeTab === "directory" && (
                 <div className="flex bg-slate-50 dark:bg-[#141d1a] p-1.5 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm items-center overflow-x-auto custom-scrollbar w-full">
                   <div className="pl-2 pr-1 text-gray-400 hidden sm:block">
@@ -563,22 +575,10 @@ export default function StaffPayrollPage() {
                   />
                 </div>
               )}
-
-              {/* 🚀 Search Box */}
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
-                <input 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={activeTab === "directory" ? "Search staff by name or role..." : "Search payroll by ID or Employee..."}
-                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
             </div>
           </div>
 
-          <div className="p-3 sm:p-5 space-y-2.5 sm:space-y-3 bg-slate-50/50 dark:bg-transparent rounded-b-2xl">
+          <div className="p-3 sm:p-5 space-y-2.5 sm:space-y-3 bg-slate-50/50 dark:bg-transparent rounded-b-2xl h-auto">
             {activeTab === "directory" 
               ? filteredStaff.length === 0 ? (
                   <div className="text-center py-10 text-gray-400 text-xs sm:text-sm">No staff found for this period.</div>
@@ -665,7 +665,7 @@ export default function StaffPayrollPage() {
 
         {/* ================= RIGHT COLUMN (DESKTOP) ================= */}
         {/* 🚀 lg:sticky added so it follows screen scroll on desktop */}
-        <div id="details-section" className="hidden lg:flex lg:col-span-5 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex-col relative transition-colors h-auto mt-2 lg:mt-0 lg:sticky lg:top-6">
+        <div id="details-section" className="hidden lg:flex lg:col-span-5 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex-col relative transition-colors h-max lg:sticky lg:top-6">
           {activeTab === "directory" ? (
             selectedStaff ? renderStaffDetails() : (
               <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-slate-400 dark:text-gray-500 min-h-[300px]">
