@@ -17,17 +17,9 @@ export default function OrdersPage() {
   const [isBulkBooking, setIsBulkBooking] = useState(false);
 
   const [activeTab, setActiveTab] = useState("All orders");
-  
-  // 🚀 ডিফল্টভাবে চলতি মাসের প্রথম দিন এবং আজকের তারিখ সেট করা হলো
-  const todayDateStr = new Date().toISOString().split('T')[0];
-  const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-
-  const [startDate, setStartDate] = useState(firstDayOfMonth);
-  const [endDate, setEndDate] = useState(todayDateStr);
-  const [appliedStartDate, setAppliedStartDate] = useState(firstDayOfMonth);
-  const [appliedEndDate, setAppliedEndDate] = useState(todayDateStr);
-
+  const [timeFilter, setTimeFilter] = useState("ALL"); // ALL, 30D, 7D, YESTERDAY, TODAY
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  
   const [selectedOrder, setSelectedOrder] = useState<any>(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -101,7 +93,7 @@ export default function OrdersPage() {
   };
 
   const handlePermanentDelete = async (id: string) => {
-    if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবে না।")) return;
+    if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবেবিধা।")) return;
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`${apiUrl}/orders/${id}/permanent`, {
@@ -253,7 +245,6 @@ export default function OrdersPage() {
     }
 
     let matchesTab = false;
-    
     if (activeTab === "All orders" || activeTab === "Trash") {
       matchesTab = true;
     } else if (activeTab === "Cancel") {
@@ -274,16 +265,23 @@ export default function OrdersPage() {
 
     const orderDate = new Date(order.createdAt);
     let matchesDate = true;
+    const now = new Date();
+    
+    // Yesterday Date Setup
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
 
-    if (appliedStartDate && appliedEndDate) {
-      // 🚀 স্বয়ংক্রিয়ভাবে সময় সেট করে নির্ভুল ডেট রেঞ্জ ফিল্টারিং
-      const start = new Date(appliedStartDate);
-      start.setHours(0, 0, 0, 0); // দিনের শুরু (12:00 AM)
-      
-      const end = new Date(appliedEndDate);
-      end.setHours(23, 59, 59, 999); // দিনের শেষ (11:59:59 PM)
+    const diffTime = now.getTime() - orderDate.getTime();
+    const diffDays = diffTime / (1000 * 3600 * 24);
 
-      matchesDate = orderDate >= start && orderDate <= end;
+    if (timeFilter === "TODAY") {
+      matchesDate = orderDate.toDateString() === now.toDateString();
+    } else if (timeFilter === "YESTERDAY") {
+      matchesDate = orderDate.toDateString() === yesterday.toDateString();
+    } else if (timeFilter === "7D") {
+      matchesDate = diffDays <= 7;
+    } else if (timeFilter === "30D") {
+      matchesDate = diffDays <= 30;
     }
 
     return matchesTab && matchesSearch && matchesDate;
@@ -325,15 +323,17 @@ export default function OrdersPage() {
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen relative overflow-hidden transition-colors">
       
       {/* ================= HEADER ================= */}
-      <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between sm:items-center bg-white dark:bg-[#1a2421] p-6 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Orders Management</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage Facebook commerce workflow efficiently</p>
+      <div className="flex flex-row justify-between items-center bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-white/5 shadow-sm gap-2">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-2xl font-bold text-white tracking-tight truncate">Orders Management</h1>
+          <p className="text-[10px] sm:text-sm text-gray-400 mt-0.5 truncate">Manage Facebook commerce workflow efficiently</p>
         </div>
+        
         <Link 
           href="/dashboard/orders/create"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-sm w-full sm:w-auto">
-          + Create New Order
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl flex items-center gap-1 text-xs sm:text-sm font-bold transition-colors shadow-md shrink-0 cursor-pointer"
+        >
+          <span className="text-sm sm:text-base font-black leading-none">+</span> New Order
         </Link>
       </div>
 
@@ -363,7 +363,7 @@ export default function OrdersPage() {
           })}
         </div>
 
-        {/* ================= TOOLBAR WITH CUSTOM CALENDAR RANGE & LOAD BUTTON ================= */}
+        {/* ================= TOOLBAR WITH QUICK TIME FILTERS ================= */}
         <div className="bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors">
           <div className="relative w-full xl:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
@@ -376,48 +376,26 @@ export default function OrdersPage() {
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
-            
-            {/* 🚀 Date Range & Load Button Bar */}
-            <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 dark:bg-white/5 p-1.5 rounded-xl border border-gray-200 dark:border-white/10 w-full sm:w-auto justify-between">
-              
-              <div className="flex items-center gap-1.5 px-2">
-                <Calendar size={16} className="text-gray-400 shrink-0" />
-                <span className="text-xs font-bold text-slate-600 dark:text-gray-300">From:</span>
-                <input 
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white outline-none font-medium cursor-pointer"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5 px-2 border-l border-gray-200 dark:border-white/10">
-                <span className="text-xs font-bold text-slate-600 dark:text-gray-300">To:</span>
-                <input 
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-white outline-none font-medium cursor-pointer"
-                />
-              </div>
-
-              {/* 🚀 Load Button */}
+          <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full xl:w-auto">
+            {[
+              { id: "ALL", label: "All" },
+              { id: "30D", label: "Last 30d" },
+              { id: "7D", label: "Last 7d" },
+              { id: "YESTERDAY", label: "Yesterday" },
+              { id: "TODAY", label: "Today" },
+            ].map((filter) => (
               <button
-                onClick={() => {
-                  setAppliedStartDate(startDate);
-                  setAppliedEndDate(endDate);
-                }}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer ml-1"
+                key={filter.id}
+                onClick={() => setTimeFilter(filter.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
+                  timeFilter === filter.id
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "bg-gray-50 dark:bg-[#141d1a] text-slate-600 dark:text-gray-400 border border-gray-200 dark:border-white/5 hover:text-slate-800 dark:hover:text-white"
+                }`}
               >
-                Load
+                {filter.label}
               </button>
-            </div>
-
-            <div className="flex items-center border border-gray-200 dark:border-white/10 rounded-lg p-0.5 bg-gray-50 dark:bg-[#141d1a] shrink-0 self-end sm:self-auto">
-              <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white dark:bg-[#1a2421] text-emerald-600 dark:text-emerald-400 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}><LayoutGrid size={16} /></button>
-              <button onClick={() => setViewMode("list")} className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white dark:bg-[#1a2421] text-emerald-600 dark:text-emerald-400 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"}`}><ListIcon size={16} /></button>
-            </div>
+            ))}
           </div>
         </div>
 

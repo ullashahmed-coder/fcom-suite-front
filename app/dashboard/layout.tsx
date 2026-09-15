@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingCart, Users, Package, Undo2, Truck, Box, BarChart3,
   Briefcase, UserCog, History, Settings, Bell, Moon, Sun, Menu, X, CreditCard,
   LogOut, Headphones, ChevronLeft, ChevronDown, User, AlertTriangle, CheckCircle2,
-  Calendar, LucideIcon, HelpCircle, Megaphone, Lock,
+  Calendar, LucideIcon, HelpCircle, Megaphone, Lock, Home, RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -105,13 +105,11 @@ const getIconDetails = (type: string) => {
 /* ===================== SIDEBAR NAV LIST ===================== */
 
 function NavList({ items, pathname, onNavigate, userPermissions, userRole }: { items: NavItem[]; pathname: string; onNavigate: () => void; userPermissions: any; userRole: string; }) {
-  
   const isOwnerOrAdmin = userRole === 'shop_owner' || userRole === 'admin';
 
   return (
     <nav className="space-y-0.5">
       {items.map((item) => {
-        // 🚀 ফিক্স: এখন লজিক একদম স্ট্রিক্ট! ড্যাশবোর্ড সবার জন্য, আর বাকি সব কিছু পারমিশন অনুযায়ী।
         const hasPermission = isOwnerOrAdmin 
           || item.id === 'dashboard' 
           || userPermissions?.[item.id] === true;
@@ -133,6 +131,50 @@ function NavList({ items, pathname, onNavigate, userPermissions, userRole }: { i
         );
       })}
     </nav>
+  );
+}
+
+/* ===================== MOBILE BOTTOM NAV ===================== */
+
+function MobileBottomNav() {
+  const pathname = usePathname();
+
+  // 🚀 যদি ইউজার অর্ডার ক্রিয়েট পেজে বা এমন কোনো পেজে থাকে যেখানে কনফার্ম বাটন ঢাকা পড়ে, তবে নেভবার হাইড থাকবে
+  const shouldHideNav = pathname.includes("/orders/create") || pathname.includes("/create");
+
+  if (shouldHideNav) {
+    return null; // এই পেজগুলোতে নেভবার রেন্ডার হবে না
+  }
+
+  const navItems = [
+    { label: "Home", href: "/dashboard/mobile", icon: Home },
+    { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+    { label: "Packing", href: "/dashboard/packing", icon: Package },
+    { label: "Returns", href: "/dashboard/returns", icon: RotateCcw },
+    { label: "Products", href: "/dashboard/products", icon: Box },
+  ];
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a2421] border-t border-gray-200 dark:border-white/10 px-4 py-2.5 flex justify-around items-center z-50 md:hidden shadow-2xl">
+      {navItems.map((item) => {
+        const isActive = pathname === item.href;
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              isActive 
+                ? "text-emerald-600 dark:text-emerald-400 font-bold" 
+                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            }`}
+          >
+            <Icon size={20} />
+            <span className="text-[10px]">{item.label}</span>
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -230,7 +272,6 @@ function ProfileDropdown({
           <Settings size={16} /> Settings
         </Link>
         
-        {/* 🚀 ফিক্স: শুধুমাত্র অ্যাডমিন বা ওনার হলে সাবস্ক্রিপশন মেনু প্রোফাইল ড্রপডাউনে দেখাবে */}
         {isOwnerOrAdmin && (
           <Link href="/dashboard/subscription" onClick={onClose} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-emerald-600 dark:hover:text-emerald-400 transition focus-visible:outline-none">
             <CreditCard size={16} /> Billing & Plan
@@ -411,7 +452,6 @@ export default function TenantDashboardLayout({
         </div>
 
         <div className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
-          
           <NavList items={MAIN_NAV} pathname={pathname} onNavigate={closeMobileMenu} userPermissions={userPermissions} userRole={userRole} />
 
           <div className="mt-7 mb-2 px-3 flex items-center gap-3">
@@ -457,7 +497,7 @@ export default function TenantDashboardLayout({
       </aside>
 
       {/* ===================== MAIN ===================== */}
-      <main className="flex-1 flex flex-col min-w-0 relative">
+      <main className="flex-1 flex flex-col min-w-0 relative pb-16 md:pb-0">
         {shopStatus === "PAST_DUE" && (
           <div className="bg-rose-500 text-white px-4 py-2.5 text-center text-sm font-bold flex flex-col sm:flex-row justify-center items-center gap-2 z-50 relative shadow-sm shrink-0">
             <div className="flex items-center gap-2">
@@ -518,7 +558,6 @@ export default function TenantDashboardLayout({
                <ChevronDown size={14} className={`text-gray-400 transition-transform hidden sm:block ${isProfileOpen ? "rotate-180" : "group-hover:text-gray-600 dark:group-hover:text-white"}`} />
              </button>
              
-             {/* 🚀 ফিক্স: ProfileDropdown-এ userRole পাঠানো হচ্ছে */}
              <ProfileDropdown 
                open={isProfileOpen} 
                onClose={() => setIsProfileOpen(false)} 
@@ -554,6 +593,9 @@ export default function TenantDashboardLayout({
          )}
        </div>
       </main>
+
+      {/* 🚀 মোবাইল স্ক্রিনের জন্য ফিক্সড বটম নেভবার */}
+      <MobileBottomNav />
 
       <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
 

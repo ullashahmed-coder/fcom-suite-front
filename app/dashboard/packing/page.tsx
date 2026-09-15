@@ -22,14 +22,14 @@ export default function MixedPackingDashboard() {
   const [allPackedOrders, setAllPackedOrders] = useState<any[]>([])
   const [returnedOrders, setReturnedOrders] = useState<any[]>([])
 
-  // 🚀 মোবাইলে ড্রয়ার ওপেন করার জন্য নতুন স্টেট
+  // মোবাইলে ড্রয়ার ওপেন করার জন্য স্টেট
   const [isQueueDrawerOpen, setIsQueueDrawerOpen] = useState(false)
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false)
 
-  // User Role State
   const [userRole, setUserRole] = useState<string>("")
   
-  const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'all' | 'custom'>('today')
+  // 🚀 ডিফল্টভাবে 'all' করা হয়েছে যাতে আগের সব হিস্ট্রি বা প্যাক করা ডাটা দেখা যায়
+  const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'all' | 'custom'>('all')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
 
@@ -37,7 +37,6 @@ export default function MixedPackingDashboard() {
   const [packedSearchQuery, setPackedSearchQuery] = useState("")
 
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
-  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPackingOrders()
@@ -54,20 +53,35 @@ export default function MixedPackingDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        
         const validOrders = data.filter((o: any) => !o.isDeleted);
         setOrders(validOrders)
 
-        const inReview = validOrders.filter((o: any) => ['IN_REVIEW', 'in review', 'In Review', 'BOOKED', 'Booked', 'booked'].includes(o.status))
-        setToPackOrders(inReview)
-        if (inReview.length > 0 && !selectedOrder) setSelectedOrder(inReview[0])
+        // 🚀 ১. Packing Queue: শুধুমাত্র যেগুলো প্যাকিংয়ের অপেক্ষায় আছে (IN_REVIEW, BOOKED, PENDING)
+        // 🚀 ১. Packing Queue: কেবল সেই অর্ডারগুলোই আসবে যেগুলো কুরিয়ারে বুকিং করা হয়েছে (CN / Consignment ID আছে) এবং এখনো প্যাক করা হয়নি
+        const inReview = validOrders.filter((o: any) => {
+          const s = o.status?.toUpperCase() || "";
+          const hasConsignment = Boolean(o.consignmentId || o.trackingCode);
+          
+          // বুকিং করা হয়েছে (CN আছে) কিন্তু এখনো প্যাক বা ডিসপাচ হয়নি
+          return hasConsignment && ['IN_REVIEW', 'BOOKED', 'PENDING', 'COURIER_PENDING'].includes(s);
+        });
+        setToPackOrders(inReview);
+        if (inReview.length > 0 && !selectedOrder) setSelectedOrder(inReview[0]);
 
-        const postPackStatuses = ['PACKED', 'COURIER_PENDING', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'APPROVAL PENDING', 'APPROVAL_PENDING'];
-        const packedHistory = validOrders.filter((o: any) => postPackStatuses.includes(o.status?.toUpperCase()))
-        setAllPackedOrders(packedHistory.reverse())
+        // 🚀 ২. Packed History: যেগুলো ইতিমধ্যে প্যাক করা হয়েছে অথবা কুরিয়ার বা অন্য কোনো স্ট্যাটাসে চলে গেছে, সেগুলোর হিস্ট্রি সবসময় সে থাকবে
+        const packedHistory = validOrders.filter((o: any) => {
+          const s = o.status?.toUpperCase() || "";
+          // প্যাক করা বা এর পরের যেকোনো স্ট্যাটাসের অর্ডার হিস্ট্রিতে দেখাবে
+          return s !== 'IN_REVIEW' && s !== 'BOOKED' && s !== 'PENDING' && !['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(s);
+        });
+        setAllPackedOrders(packedHistory.reverse());
 
-        const returns = validOrders.filter((o: any) => ['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(o.status?.toUpperCase()))
-        setReturnedOrders(returns.reverse())
+        // 🚀 ৩. Returns / Cancelled
+        const returns = validOrders.filter((o: any) => {
+          const s = o.status?.toUpperCase() || "";
+          return ['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(s);
+        });
+        setReturnedOrders(returns.reverse());
       }
     } catch (error) {
       console.error("Error fetching orders:", error)
@@ -264,7 +278,6 @@ export default function MixedPackingDashboard() {
     return <span className="text-[9px] sm:text-[10px] bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-gray-300 px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1"><Clock size={12} /> {status}</span>;
   }
 
-  // 🚀 রিইউজেবল কিউ ডিটেইলস (ডেস্কটপ এবং মোবাইল ড্রয়ারের জন্য)
   const renderQueueDetails = () => (
     <>
       <div className="bg-slate-50 dark:bg-[#141d1a] p-4 sm:p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
@@ -341,7 +354,6 @@ export default function MixedPackingDashboard() {
     </>
   );
 
-  // 🚀 রিইউজেবল হিস্ট্রি ডিটেইলস (ডেস্কটপ এবং মোবাইল ড্রয়ারের জন্য)
   const renderHistoryDetails = () => (
     <>
       <div className="bg-slate-50 dark:bg-[#141d1a] p-4 sm:p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
@@ -454,11 +466,11 @@ export default function MixedPackingDashboard() {
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white flex items-center gap-2 uppercase tracking-wider">
             Main Packing
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-gray-400 font-medium mt-0.5 sm:mt-1">Deshio Tati official packaging and dispatch</p>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-gray-400 font-medium mt-0.5 sm:mt-1">Packaging and dispatch</p>
         </div>
       </div>
 
-      {/* 🚀 Top Action Buttons (COMPACT FOR MOBILE) */}
+      {/* Top Action Buttons */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div onClick={() => setActiveTab('queue')} className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border flex flex-row sm:flex-col items-center sm:text-center justify-start sm:justify-center gap-3 sm:gap-2 cursor-pointer transition-all ${activeTab === 'queue' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-600 dark:border-emerald-500 shadow-sm ring-1 ring-emerald-600 dark:ring-emerald-500' : 'bg-white dark:bg-[#1a2421] hover:bg-slate-50 dark:hover:bg-white/5 border-gray-200 dark:border-white/10'}`}>
           <div className={`p-2.5 sm:p-3 rounded-lg sm:rounded-xl shrink-0 ${activeTab === 'queue' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>
@@ -523,7 +535,7 @@ export default function MixedPackingDashboard() {
                       key={order.id}
                       onClick={() => {
                         setSelectedOrder(order);
-                        setIsQueueDrawerOpen(true); // 🚀 মোবাইলে পপআপ ওপেন
+                        setIsQueueDrawerOpen(true);
                       }}
                       className={`flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl cursor-pointer transition-all border-2 ${isActive ? 'border-emerald-600 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-500/10 shadow-sm' : 'border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 bg-white dark:bg-[#141d1a]'}`}
                     >
@@ -603,7 +615,6 @@ export default function MixedPackingDashboard() {
                 </div>
               </div>
 
-              {/* Scrollable Filters on Mobile */}
               <div className="flex w-full md:w-auto overflow-x-auto custom-scrollbar pb-1">
                 <div className="flex items-center bg-slate-100 dark:bg-[#141d1a] p-1 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner shrink-0">
                   {(['today', 'yesterday', 'last7days', 'last30days', 'all'] as const).map((filter) => (
@@ -667,7 +678,7 @@ export default function MixedPackingDashboard() {
                       key={order.id}
                       onClick={() => {
                         setSelectedPackedOrder(order);
-                        setIsHistoryDrawerOpen(true); // 🚀 মোবাইলে পপআপ ওপেন
+                        setIsHistoryDrawerOpen(true);
                       }}
                       className={`flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl cursor-pointer transition-all border-2 ${isActive ? 'border-emerald-600 dark:border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10 shadow-sm' : 'border-slate-100 dark:border-white/5 hover:border-emerald-200 dark:hover:border-white/20 bg-white dark:bg-[#1a2421]'}`}
                     >
@@ -727,7 +738,7 @@ export default function MixedPackingDashboard() {
         </div>
       )}
 
-      {/* ================= MOBILE DRAWER / MODAL FOR PACKING QUEUE ================= */}
+      {/* ================= MOBILE DRAWER FOR QUEUE ================= */}
       {isQueueDrawerOpen && selectedOrder && activeTab === 'queue' && (
         <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
@@ -742,7 +753,7 @@ export default function MixedPackingDashboard() {
         </div>
       )}
 
-      {/* ================= MOBILE DRAWER / MODAL FOR PACKED HISTORY ================= */}
+      {/* ================= MOBILE DRAWER FOR HISTORY ================= */}
       {isHistoryDrawerOpen && selectedPackedOrder && activeTab === 'history' && (
         <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">

@@ -102,7 +102,7 @@ export default function LoginPage() {
     }
   };
 
-  // লগইন সাকসেস হলে টোকেন সেভ ও রিডাইরেক্ট করার কমন ফাংশন
+  // লগইন সাকসেস হলে টোকেন সেভ ও রেসপন্সিভ রিডাইরেক্ট করার ফাংশন
   const completeLoginProcess = (data: any) => {
     localStorage.setItem("access_token", data.access_token);
     if (data.user) {
@@ -124,7 +124,13 @@ export default function LoginPage() {
       if (data.user && data.user.role === "SUPER_ADMIN") {
         window.location.href = "/super-admin";
       } else {
-        window.location.href = "/dashboard";
+        // 🚀 মোবাইল স্ক্রিন হলে সরাসরি মোবাইল ড্যাশবোর্ডে (/dashboard/mobile) যাবে, অন্যথায় ডেস্কটপ ড্যাশবোর্ডে
+        const isMobile = window.innerWidth < 768; // 768px এর নিচে মোবাইল স্ক্রিন ধরা হয়
+        if (isMobile) {
+          window.location.href = "/dashboard/mobile";
+        } else {
+          window.location.href = "/dashboard";
+        }
       }
     }, 1400);
   };
