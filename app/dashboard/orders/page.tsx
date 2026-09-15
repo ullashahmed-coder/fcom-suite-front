@@ -378,9 +378,9 @@ export default function OrdersPage() {
 
           <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full xl:w-auto">
             {[
-              { id: "ALL", label: "All Time" },
-              { id: "30D", label: "Last 30 Days" },
-              { id: "7D", label: "Last 7 Days" },
+              { id: "ALL", label: "All" },
+              { id: "30D", label: "Last 30d" },
+              { id: "7D", label: "Last 7d" },
               { id: "YESTERDAY", label: "Yesterday" },
               { id: "TODAY", label: "Today" },
             ].map((filter) => (
