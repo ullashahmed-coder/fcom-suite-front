@@ -93,7 +93,7 @@ export default function OrdersPage() {
   };
 
   const handlePermanentDelete = async (id: string) => {
-    if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবেবিধা।")) return;
+    if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবে না।")) return;
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`${apiUrl}/orders/${id}/permanent`, {
@@ -322,11 +322,11 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen relative overflow-hidden transition-colors">
       
-      {/* ================= HEADER ================= */}
-      <div className="flex flex-row justify-between items-center bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-white/5 shadow-sm gap-2">
+      {/* ================= HEADER (Light/Dark Mode Fixed) ================= */}
+      <div className="flex flex-row justify-between items-center bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm gap-2 transition-colors">
         <div className="min-w-0">
-          <h1 className="text-base sm:text-2xl font-bold text-white tracking-tight truncate">Orders Management</h1>
-          <p className="text-[10px] sm:text-sm text-gray-400 mt-0.5 truncate">Manage Facebook commerce workflow efficiently</p>
+          <h1 className="text-base sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight truncate">Orders Management</h1>
+          <p className="text-[10px] sm:text-sm text-slate-500 dark:text-gray-400 mt-0.5 truncate">Manage Facebook commerce workflow efficiently</p>
         </div>
         
         <Link 
@@ -378,9 +378,9 @@ export default function OrdersPage() {
 
           <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full xl:w-auto">
             {[
-              { id: "ALL", label: "All" },
-              { id: "30D", label: "Last 30d" },
-              { id: "7D", label: "Last 7d" },
+              { id: "ALL", label: "All Time" },
+              { id: "30D", label: "Last 30 Days" },
+              { id: "7D", label: "Last 7 Days" },
               { id: "YESTERDAY", label: "Yesterday" },
               { id: "TODAY", label: "Today" },
             ].map((filter) => (

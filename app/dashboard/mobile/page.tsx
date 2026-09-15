@@ -27,11 +27,11 @@ export default function TenantDashboardHome() {
     cancelledAmount: 0
   });
 
-  // 🚀 Order Limit Logic (For Free Tier)
+  // Order Limit Logic (For Free Tier)
   const MAX_MONTHLY_ORDERS = 50; 
   const currentOrdersCount = orders.length;
   const remainingOrders = Math.max(0, MAX_MONTHLY_ORDERS - currentOrdersCount);
-  const showUpgradeBanner = remainingOrders <= 10; // যখন ১০টি বা তার কম বাকি থাকবে তখন শো করবে
+  const showUpgradeBanner = remainingOrders <= 10; 
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -145,40 +145,40 @@ export default function TenantDashboardHome() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1714] text-white pb-28 font-sans selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f1714] text-slate-800 dark:text-white pb-28 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
       
-      {/* 🟢 Top Header */}
-      <div className="bg-[#132e25] pt-6 pb-10 px-5 rounded-b-[35px] shadow-lg relative border-b border-white/5 z-0">
+      {/* 🟢 Top Header (Brand Color always) */}
+      <div className="bg-emerald-600 dark:bg-[#132e25] pt-6 pb-10 px-5 rounded-b-[35px] shadow-lg relative border-b border-emerald-700/50 dark:border-white/5 z-0">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-500 text-slate-900 font-extrabold rounded-full flex items-center justify-center shadow-md text-lg">
+            <div className="w-10 h-10 bg-white text-emerald-600 dark:bg-emerald-500 dark:text-slate-900 font-extrabold rounded-full flex items-center justify-center shadow-md text-lg">
               {userName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="text-xs text-emerald-300 font-medium">Good morning</p>
-              <h1 className="text-xl font-extrabold tracking-wide">{userName}</h1>
+              <p className="text-xs text-emerald-50 dark:text-emerald-300 font-medium">Good morning</p>
+              <h1 className="text-xl font-extrabold text-white tracking-wide">{userName}</h1>
             </div>
           </div>
-          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-bold tracking-wider uppercase">
+          <span className="px-3 py-1 bg-white/20 dark:bg-emerald-500/10 border border-white/30 dark:border-emerald-500/20 text-white dark:text-emerald-400 rounded-full text-[10px] font-bold tracking-wider uppercase backdrop-blur-sm">
             ACTIVE
           </span>
         </div>
 
         {/* 📊 Today's Summary Box */}
-        <div className="bg-[#1a2421] border border-white/10 rounded-2xl p-4 shadow-md relative">
+        <div className="bg-white dark:bg-[#1a2421] border border-gray-100 dark:border-white/10 rounded-2xl p-4 shadow-md relative">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Today's Summary</h3>
+            <h3 className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Today's Summary</h3>
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#141d1a] p-3.5 rounded-xl border border-white/5">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Sells Today</p>
-              <h3 className="text-lg sm:text-xl font-black text-emerald-400">৳ {stats.salesToday.toLocaleString()}</h3>
+            <div className="bg-slate-50 dark:bg-[#141d1a] p-3.5 rounded-xl border border-gray-100 dark:border-white/5">
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Sells Today</p>
+              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">৳ {stats.salesToday.toLocaleString()}</h3>
             </div>
-            <div className="bg-[#141d1a] p-3.5 rounded-xl border border-white/5">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Orders Today</p>
-              <h3 className="text-lg sm:text-xl font-black text-white">{stats.ordersToday}</h3>
+            <div className="bg-slate-50 dark:bg-[#141d1a] p-3.5 rounded-xl border border-gray-100 dark:border-white/5">
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Orders Today</p>
+              <h3 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white">{stats.ordersToday}</h3>
             </div>
           </div>
         </div>
@@ -186,16 +186,16 @@ export default function TenantDashboardHome() {
 
       <div className="px-4 -mt-4 space-y-5 relative z-10">
 
-        {/* 🛑 UPGRADE BANNER (Shows only when order limit is nearing end) */}
+        {/* 🛑 UPGRADE BANNER */}
         {!loading && showUpgradeBanner && (
-          <div className="bg-gradient-to-r from-orange-600 to-rose-600 rounded-2xl p-4 shadow-xl flex items-center justify-between border border-orange-500/30 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl p-4 shadow-xl flex items-center justify-between border border-orange-500/30 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} className="text-white" />
               </div>
               <div>
                 <h3 className="text-[13px] font-extrabold text-white leading-tight">Order Limit Alert!</h3>
-                <p className="text-[10px] text-orange-100 font-medium mt-0.5 leading-snug">
+                <p className="text-[10px] text-orange-50 font-medium mt-0.5 leading-snug">
                   Only <strong>{remainingOrders} orders</strong> left. Upgrade now to avoid interruption.
                 </p>
               </div>
@@ -210,137 +210,133 @@ export default function TenantDashboardHome() {
         )}
         
         {/* ⚡ Quick Actions (8 Grid Icons) */}
-        <div className="bg-[#1a2421] rounded-2xl p-4 shadow-md border border-white/10">
-          <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3.5">Quick Actions</h3>
+        <div className="bg-white dark:bg-[#1a2421] rounded-2xl p-4 shadow-md border border-gray-100 dark:border-white/10">
+          <h3 className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-3.5">Quick Actions</h3>
           
           <div className="grid grid-cols-4 gap-3 text-center">
             
-            <Link href="/dashboard/orders/create" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-emerald-500/10 border border-white/5 rounded-xl text-emerald-400 transition-colors">
+            <Link href="/dashboard/orders/create" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-gray-100 dark:border-white/5 rounded-xl text-emerald-600 dark:text-emerald-400 transition-colors">
               <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-sm">
                 <Plus size={20} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">New Order</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">New Order</span>
             </Link>
 
-            <Link href="/dashboard/orders" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-blue-400">
+            <Link href="/dashboard/orders" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-blue-500 dark:text-blue-400">
                 <ShoppingBag size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Orders</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Orders</span>
             </Link>
 
-            <Link href="/dashboard/packing" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-purple-400">
+            <Link href="/dashboard/packing" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-purple-500 dark:text-purple-400">
                 <Package size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Packing</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Packing</span>
             </Link>
 
-            <Link href="/dashboard/products" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-amber-400">
+            <Link href="/dashboard/products" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-amber-500 dark:text-amber-400">
                 <Box size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Products</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Products</span>
             </Link>
 
-            <Link href="/dashboard/courier" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-emerald-400">
+            <Link href="/dashboard/courier" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-emerald-500 dark:text-emerald-400">
                 <Truck size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Courier</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Courier</span>
             </Link>
 
-            <Link href="/dashboard/reports" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-indigo-400">
+            <Link href="/dashboard/reports" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-indigo-500 dark:text-indigo-400">
                 <BarChart3 size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Reports</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Reports</span>
             </Link>
 
-            <Link href="/dashboard/customers" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-rose-400">
+            <Link href="/dashboard/customers" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-rose-500 dark:text-rose-400">
                 <Users size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Customers</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Customers</span>
             </Link>
 
-            <Link href="/dashboard/settings" className="flex flex-col items-center gap-1.5 p-2.5 bg-[#141d1a] hover:bg-white/5 border border-white/5 rounded-xl text-gray-300 transition-colors">
-              <div className="w-10 h-10 bg-[#1a2421] border border-white/10 rounded-xl flex items-center justify-center shadow-sm text-gray-300">
+            <Link href="/dashboard/settings" className="flex flex-col items-center gap-1.5 p-2.5 bg-slate-50 dark:bg-[#141d1a] hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-100 dark:border-white/5 rounded-xl transition-colors">
+              <div className="w-10 h-10 bg-white dark:bg-[#1a2421] border border-gray-200 dark:border-white/10 rounded-xl flex items-center justify-center shadow-sm text-slate-500 dark:text-gray-300">
                 <SettingsIcon size={18} />
               </div>
-              <span className="text-[10px] font-bold text-gray-200">Settings</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-gray-200">Settings</span>
             </Link>
 
           </div>
         </div>
 
-        {/* 📊 Last 30 Days Stats (2x2 Box Grid) */}
+        {/* 📊 Last 30 Days Stats */}
         <div className="space-y-2.5">
           <div className="flex justify-between items-center px-1">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Last 30 Days</h3>
-            <span className="text-xs text-emerald-400 font-bold">At a glance</span>
+            <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Last 30 Days</h3>
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">At a glance</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             
-            {/* Total */}
-            <div className="bg-[#1a2421] p-4 rounded-2xl border border-white/10 shadow-md space-y-2">
-              <div className="w-8 h-8 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+              <div className="w-8 h-8 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center">
                 <Box size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL</p>
-                <h3 className="text-xl font-black text-white mt-0.5">{stats.total}</h3>
-                <p className="text-[11px] text-gray-400 mt-1">Last 30 days</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">TOTAL</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.total}</h3>
+                <p className="text-[11px] text-slate-400 dark:text-gray-400 mt-1">Last 30 days</p>
               </div>
             </div>
 
-            {/* Delivered */}
-            <div className="bg-[#1a2421] p-4 rounded-2xl border border-white/10 shadow-md space-y-2">
-              <div className="w-8 h-8 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+              <div className="w-8 h-8 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center">
                 <CheckCircle2 size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DELIVERED</p>
-                <h3 className="text-xl font-black text-white mt-0.5">{stats.delivered}</h3>
-                <p className="text-[11px] font-bold text-emerald-400 mt-1">৳ {stats.deliveredAmount.toLocaleString()}</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">DELIVERED</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.delivered}</h3>
+                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">৳ {stats.deliveredAmount.toLocaleString()}</p>
               </div>
             </div>
 
-            {/* Pending */}
-            <div className="bg-[#1a2421] p-4 rounded-2xl border border-white/10 shadow-md space-y-2">
-              <div className="w-8 h-8 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+              <div className="w-8 h-8 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center">
                 <Clock size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PENDING</p>
-                <h3 className="text-xl font-black text-white mt-0.5">{stats.pending}</h3>
-                <p className="text-[11px] font-bold text-amber-400 mt-1">৳ {stats.pendingAmount.toLocaleString()}</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">PENDING</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.pending}</h3>
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-1">৳ {stats.pendingAmount.toLocaleString()}</p>
               </div>
             </div>
 
-            {/* Cancelled */}
-            <div className="bg-[#1a2421] p-4 rounded-2xl border border-white/10 shadow-md space-y-2">
-              <div className="w-8 h-8 bg-rose-500/10 text-rose-400 rounded-xl flex items-center justify-center">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+              <div className="w-8 h-8 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center">
                 <XCircle size={16} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">CANCELLED</p>
-                <h3 className="text-xl font-black text-white mt-0.5">{stats.cancelled}</h3>
-                <p className="text-[11px] font-bold text-rose-400 mt-1">৳ {stats.cancelledAmount.toLocaleString()}</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">CANCELLED</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.cancelled}</h3>
+                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 mt-1">৳ {stats.cancelledAmount.toLocaleString()}</p>
               </div>
             </div>
 
           </div>
         </div>
 
-        {/* 🌟 Top 5 Best Selling Products (Horizontal Slider) */}
+        {/* 🌟 Top 5 Best Selling Products */}
         <div className="space-y-2.5 pt-2">
           <div className="flex justify-between items-center px-1">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span> Best Selling Products
             </h3>
-            <Link href="/dashboard/products/best-selling" className="text-xs text-emerald-400 font-bold hover:underline">
+            <Link href="/dashboard/products/best-selling" className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
               View All &gt;
             </Link>
           </div>
@@ -354,7 +350,7 @@ export default function TenantDashboardHome() {
                 return (
                   <div 
                     key={item.id || index}
-                    className="min-w-[150px] sm:min-w-[170px] bg-[#1a2421] rounded-2xl border border-white/10 p-3 shadow-md shrink-0 snap-start flex flex-col justify-between relative group"
+                    className="min-w-[150px] sm:min-w-[170px] bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 p-3 shadow-sm shrink-0 snap-start flex flex-col justify-between relative group"
                   >
                     <span className="absolute top-2 left-2 z-10 w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow">
                       #{index + 1}
@@ -365,23 +361,23 @@ export default function TenantDashboardHome() {
                         <img 
                           src={item.imageUrl.startsWith('http') ? item.imageUrl : `${apiUrl}${item.imageUrl}`} 
                           alt={item.name} 
-                          className="w-full h-28 object-cover rounded-xl mb-2.5 border border-white/5" 
+                          className="w-full h-28 object-cover rounded-xl mb-2.5 border border-gray-100 dark:border-white/5" 
                         />
                       ) : (
-                        <div className="w-full h-28 bg-[#141d1a] rounded-xl mb-2.5 flex items-center justify-center text-gray-500 text-xs">
+                        <div className="w-full h-28 bg-slate-50 dark:bg-[#141d1a] rounded-xl mb-2.5 flex items-center justify-center text-slate-400 dark:text-gray-500 text-xs">
                           No Image
                         </div>
                       )}
 
-                      <h4 className="text-xs font-bold text-white line-clamp-1 mb-1">{item.name}</h4>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-white line-clamp-1 mb-1">{item.name}</h4>
                     </div>
 
-                    <div className="space-y-1.5 pt-2 border-t border-white/5 text-[11px]">
-                      <div className="flex justify-between text-gray-400">
+                    <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-white/5 text-[11px]">
+                      <div className="flex justify-between text-slate-500 dark:text-gray-400">
                         <span>Sold:</span>
-                        <span className="font-bold text-emerald-400">{soldCount} pcs</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{soldCount} pcs</span>
                       </div>
-                      <div className="flex justify-between font-black text-emerald-400">
+                      <div className="flex justify-between font-black text-emerald-600 dark:text-emerald-400">
                         <span>Total:</span>
                         <span>৳ {totalRev.toLocaleString()}</span>
                       </div>
@@ -390,7 +386,7 @@ export default function TenantDashboardHome() {
                 );
               })
             ) : (
-              <div className="w-full text-center py-6 bg-[#1a2421] rounded-2xl border border-white/10 text-gray-400 text-xs">
+              <div className="w-full text-center py-6 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 text-slate-400 dark:text-gray-400 text-xs">
                 No best selling products found.
               </div>
             )}
