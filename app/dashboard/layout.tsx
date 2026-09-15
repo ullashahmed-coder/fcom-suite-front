@@ -139,7 +139,7 @@ function NavList({ items, pathname, onNavigate, userPermissions, userRole }: { i
 function MobileBottomNav() {
   const pathname = usePathname();
 
-  // 🚀 যদি ইউজার অর্ডার ক্রিয়েট পেজে বা এমন কোনো পেজে থাকে যেখানে কনফার্ম বাটন ঢাকা পড়ে, তবে নেভবার হাইড থাকবে
+  // 🚀 যদি ইউজার অর্ডার ক্রিয়েট পেজে বা এমন কোনো পেজে থাকে যেখানে কনফার্ম বাটন ঢাকা পড়ে, তবে নেভবার হাইড থাকবে
   const shouldHideNav = pathname.includes("/orders/create") || pathname.includes("/create");
 
   if (shouldHideNav) {
@@ -380,15 +380,15 @@ export default function TenantDashboardLayout({
     }
   };
 
-  useEffect(() => {
-    setMounted(true);
-    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
-    setCurrentDate(new Date().toLocaleDateString('en-US', options));
-
+  // 🚀 ইউজারের ডাটা এবং শপের নাম লোড করার ফাংশনটি আলাদা করা হলো
+  const loadUserData = () => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      setShopName(parsedUser.shopName || "My Shop");
+      
+      // ব্যাকএন্ড থেকে আসা বা লোকালস্টোরেজে আপডেট হওয়া লেটেস্ট শপের নাম বসবে
+      setShopName(parsedUser?.shop?.name || parsedUser.shopName || "My Shop");
+      
       setUserName(parsedUser.name || "User");
       setUserEmail(parsedUser.email || "");
       setUserInitial(parsedUser.name ? parsedUser.name.charAt(0).toUpperCase() : "U");
@@ -409,9 +409,26 @@ export default function TenantDashboardLayout({
         fetchFreshPermissions(parsedUser.email);
       }
     }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
+    setCurrentDate(new Date().toLocaleDateString('en-US', options));
+
+    // 🚀 ১. প্রথমবার পেজ লোড হলে ইউজারের ডেটা কল হবে
+    loadUserData();
+
+    // 🚀 ২. সেটিংস পেজ থেকে 'shopUpdated' ইভেন্ট এলে সাথে সাথে রিলোড ছাড়াই নাম পাল্টে যাবে
+    window.addEventListener("shopUpdated", loadUserData);
 
     fetchBillingStatus();
     fetchNotifications();
+
+    return () => {
+      // কম্পোনেন্ট আনমাউন্ট হলে লিসেনার রিমুভ হবে
+      window.removeEventListener("shopUpdated", loadUserData);
+    };
   }, []);
 
   useEffect(() => {

@@ -183,16 +183,26 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
+        // 🚀 ১. লোকাল স্টোরেজ পারফেক্টলি আপডেট করা
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const userObj = JSON.parse(storedUser);
+          
           userObj.shopName = settingsToSave.storeName; 
+          // শপের মেইন অবজেক্টেও নাম আপডেট করে দেওয়া (যাতে লেআউট সঠিক নাম পায়)
+          if (userObj.shop) {
+            userObj.shop.name = settingsToSave.storeName;
+          }
+          
           localStorage.setItem("user", JSON.stringify(userObj));
         }
 
+        // 🚀 ২. লেআউটকে রিয়েল-টাইম আপডেট করার ইভেন্ট পাঠানো
+        window.dispatchEvent(new Event("shopUpdated"));
+
         if (showFeedback) {
           alert("✅ সব সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে!");
-          window.location.reload(); 
+          // রিলোড করার আর কোনো দরকার নেই, ম্যাজিকের মতো লাইভ চেঞ্জ হয়ে যাবে!
         }
       } else {
         if (showFeedback) alert("❌ সেটিংস সেভ করা সম্ভব হয়নি।");
