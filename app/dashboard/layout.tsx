@@ -155,7 +155,8 @@ function MobileBottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a2421] border-t border-gray-200 dark:border-white/10 px-4 py-2.5 flex justify-around items-center z-50 md:hidden shadow-2xl">
+    // 🚀 এখানে id="mobile-bottom-nav" যোগ করা হয়েছে
+    <div id="mobile-bottom-nav" className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a2421] border-t border-gray-200 dark:border-white/10 px-4 py-2.5 flex justify-around items-center z-50 md:hidden shadow-2xl">
       {navItems.map((item) => {
         const isActive = pathname === item.href;
         const Icon = item.icon;
@@ -380,15 +381,11 @@ export default function TenantDashboardLayout({
     }
   };
 
-  // 🚀 ইউজারের ডাটা এবং শপের নাম লোড করার ফাংশনটি আলাদা করা হলো
   const loadUserData = () => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      
-      // ব্যাকএন্ড থেকে আসা বা লোকালস্টোরেজে আপডেট হওয়া লেটেস্ট শপের নাম বসবে
       setShopName(parsedUser?.shop?.name || parsedUser.shopName || "My Shop");
-      
       setUserName(parsedUser.name || "User");
       setUserEmail(parsedUser.email || "");
       setUserInitial(parsedUser.name ? parsedUser.name.charAt(0).toUpperCase() : "U");
@@ -416,17 +413,12 @@ export default function TenantDashboardLayout({
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
     setCurrentDate(new Date().toLocaleDateString('en-US', options));
 
-    // 🚀 ১. প্রথমবার পেজ লোড হলে ইউজারের ডেটা কল হবে
     loadUserData();
-
-    // 🚀 ২. সেটিংস পেজ থেকে 'shopUpdated' ইভেন্ট এলে সাথে সাথে রিলোড ছাড়াই নাম পাল্টে যাবে
     window.addEventListener("shopUpdated", loadUserData);
-
     fetchBillingStatus();
     fetchNotifications();
 
     return () => {
-      // কম্পোনেন্ট আনমাউন্ট হলে লিসেনার রিমুভ হবে
       window.removeEventListener("shopUpdated", loadUserData);
     };
   }, []);

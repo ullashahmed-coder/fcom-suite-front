@@ -20,7 +20,7 @@ export default function CourierPage() {
   const [dateFilter, setDateFilter] = useState("All Time");
   const [searchQuery, setSearchQuery] = useState("");
   
-  // 🚀 নতুন KPI কার্ড লেভেলের সাথে সামঞ্জস্যপূর্ণ ফিল্টার স্টেট ("IN REVIEW", "PENDING", "DELIVERED", "CANCELLED")
+  // 🚀 KPI ফিল্টার স্টেট ("IN REVIEW", "PENDING", "DELIVERED", "CANCELLED")
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
 
   const dateFilters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All Time"];
@@ -36,7 +36,7 @@ export default function CourierPage() {
       if (res.ok) {
         const data = await res.json();
         
-        const courierStatuses = ['PACKED', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_REVIEW'];
+        const courierStatuses = ['PACKED', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_REVIEW', 'DELIVERED_APPROVAL_PENDING'];
         const dispatched = data.filter((o: any) => !o.isDeleted && o.consignmentId && courierStatuses.includes(o.status?.toUpperCase()));
         
         setOrders(dispatched);
@@ -122,7 +122,7 @@ export default function CourierPage() {
       done: true 
     });
 
-    const isShipped = ['SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_TRANSIT'].includes(order.status?.toUpperCase());
+    const isShipped = ['SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_TRANSIT', 'DELIVERED_APPROVAL_PENDING'].includes(order.status?.toUpperCase());
     const shippedLog = logs.find((l: any) => l.status?.toUpperCase() === 'SHIPPED');
     timeline.push({ 
       status: "In Transit", 
@@ -161,19 +161,17 @@ export default function CourierPage() {
     const s = status?.toUpperCase() || "";
     if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return "DELIVERED";
     if (['RETURNED', 'CANCELLED'].includes(s)) return "CANCELLED";
-    // যদি স্ট্যাটাস IN_REVIEW হয় কিন্তু কুরিয়ারে কনসাইনমেন্ট আইডি চলে আসে বা সিঙ্ক হয়ে Shipped হয়ে যায়, তবে সেটিকে IN_REVIEW হিসেবে ধরব না, Pending এ কাউন্ট হবে
     if (s === 'IN_REVIEW') return "IN REVIEW";
-    if (['SHIPPED', 'IN_TRANSIT', 'PENDING', 'PACKED', 'PROCESSING'].includes(s)) return "PENDING";
+    if (['SHIPPED', 'IN_TRANSIT', 'PENDING', 'PACKED', 'PROCESSING', 'DELIVERED_APPROVAL_PENDING'].includes(s)) return "PENDING";
     return "PENDING"; 
   };
 
-  // 🚀 নতুন KPI কাউন্ট লজিক (যাতে IN REVIEW থেকে সিন্স হয়ে গেলে সংখ্যা কমে যায়)
+  // 🚀 KPI কাউন্ট লজিক (DELIVERED_APPROVAL_PENDING এখন পিন্ডিং ট্যাবে কাউন্ট হবে)
   const kpiInReview = orders.filter(o => o.status?.toUpperCase() === 'IN_REVIEW').length;
   
   const kpiPending = orders.filter(o => {
     const s = o.status?.toUpperCase();
-    // যেগুলোর স্ট্যাটাস শিফটেড বা ট্রানজিট বা প্রসেসিং, কিন্তু ইন রিভিউ না
-    return s !== 'IN_REVIEW' && s !== 'DELIVERED' && s !== 'RETURNED' && s !== 'CANCELLED';
+    return s !== 'IN_REVIEW' && !['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'CANCELLED'].includes(s);
   }).length;
 
   const kpiDelivered = orders.filter(o => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(o.status?.toUpperCase())).length;
@@ -389,7 +387,7 @@ export default function CourierPage() {
         </div>
       </div>
 
-      {/* ================= KPI CARDS (IN REVIEW, PENDING, DELIVERED, CANCELLED) ================= */}
+      {/* ================= KPI CARDS ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
         {[
           { key: "IN REVIEW", label: "IN REVIEW", value: kpiInReview, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },

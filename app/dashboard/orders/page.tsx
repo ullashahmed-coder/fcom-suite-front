@@ -231,7 +231,7 @@ export default function OrdersPage() {
     { label: "New orders", status: "PENDING", count: visibleOrders.filter(o => o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
     { label: "Review", status: "IN_REVIEW", count: visibleOrders.filter(o => o.status === 'IN_REVIEW').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
     { label: "Packed", status: "PACKED", count: visibleOrders.filter(o => o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
-    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || o.status === 'SHIPPED' || o.status === 'IN_TRANSIT' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
+    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || o.status === 'SHIPPED' || o.status === 'IN_TRANSIT' || o.status === 'DELIVERED_APPROVAL_PENDING' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
     { label: "Delivered", status: "DELIVERED", count: visibleOrders.filter(o => o.status === 'DELIVERED').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
     { label: "Cancel", status: "RETURNED_CANCELLED", count: visibleOrders.filter(o => returnStatuses.includes(o.status?.toUpperCase()) && o.isRestocked).length, colorClass: "text-red-500 dark:text-red-400", borderClass: "border-red-200 dark:border-red-400/30", bgClass: "bg-red-50 dark:bg-red-500/10", ringClass: "ring-red-500" },
     { label: "Trash", status: "TRASH", count: orders.filter(o => o.isDeleted).length, colorClass: "text-gray-500 dark:text-gray-400", borderClass: "border-gray-200 dark:border-gray-500/30", bgClass: "bg-gray-50 dark:bg-gray-500/10", ringClass: "ring-gray-400" },
@@ -250,7 +250,7 @@ export default function OrdersPage() {
     } else if (activeTab === "Cancel") {
       matchesTab = returnStatuses.includes(order.status?.toUpperCase()) && order.isRestocked;
     } else if (activeTab === "Pending") {
-      matchesTab = order.status === "COURIER_PENDING" || order.status === "SHIPPED" || order.status === "IN_TRANSIT" || (returnStatuses.includes(order.status?.toUpperCase()) && !order.isRestocked);
+      matchesTab = order.status === "COURIER_PENDING" || order.status === "SHIPPED" || order.status === "IN_TRANSIT" || order.status === "DELIVERED_APPROVAL_PENDING" || (returnStatuses.includes(order.status?.toUpperCase()) && !order.isRestocked);
     } else {
       matchesTab = order.status === tabConfigs.find(t => t.label === activeTab)?.status;
     }
