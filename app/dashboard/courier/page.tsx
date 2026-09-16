@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom"; 
 import { 
   Search, Truck, MapPin, CheckCircle2, 
   Clock, Package, Printer, RefreshCw, FileText, User, Loader2, X
@@ -20,11 +21,15 @@ export default function CourierPage() {
   const [dateFilter, setDateFilter] = useState("All Time");
   const [searchQuery, setSearchQuery] = useState("");
   
-  // 🚀 KPI ফিল্টার স্টেট ("IN REVIEW", "PENDING", "DELIVERED", "CANCELLED")
   const [kpiFilter, setKpiFilter] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   const dateFilters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All Time"];
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const fetchCourierOrders = async () => {
     setIsSyncing(true);
@@ -130,7 +135,7 @@ export default function CourierPage() {
       done: isShipped 
     });
 
-    const isDelivered = ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(order.status?.toUpperCase());
+    const isDelivered = ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(order.status?.toUpperCase());
     const isReturned = order.status?.toUpperCase() === 'RETURNED';
     
     if (isReturned) {
@@ -156,28 +161,27 @@ export default function CourierPage() {
     return "Unknown";
   };
 
-  // স্ট্যাটাস ম্যাপিং লজিক
   const getMappedStatus = (status: string) => {
     const s = status?.toUpperCase() || "";
-    if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return "DELIVERED";
+    // 🚀 DELIVERED_APPROVAL_PENDING কে DELIVERED হিসেবে ম্যাপ করা হলো
+    if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(s)) return "DELIVERED";
     if (['RETURNED', 'CANCELLED'].includes(s)) return "CANCELLED";
     if (s === 'IN_REVIEW') return "IN REVIEW";
-    if (['SHIPPED', 'IN_TRANSIT', 'PENDING', 'PACKED', 'PROCESSING', 'DELIVERED_APPROVAL_PENDING'].includes(s)) return "PENDING";
+    if (['SHIPPED', 'IN_TRANSIT', 'PENDING', 'PACKED', 'PROCESSING'].includes(s)) return "PENDING";
     return "PENDING"; 
   };
 
-  // 🚀 KPI কাউন্ট লজিক (DELIVERED_APPROVAL_PENDING এখন পিন্ডিং ট্যাবে কাউন্ট হবে)
   const kpiInReview = orders.filter(o => o.status?.toUpperCase() === 'IN_REVIEW').length;
   
   const kpiPending = orders.filter(o => {
     const s = o.status?.toUpperCase();
-    return s !== 'IN_REVIEW' && !['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'CANCELLED'].includes(s);
+    return s !== 'IN_REVIEW' && !['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING', 'RETURNED', 'CANCELLED'].includes(s);
   }).length;
 
-  const kpiDelivered = orders.filter(o => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(o.status?.toUpperCase())).length;
+  // 🚀 KPI কাউন্টারে DELIVERED_APPROVAL_PENDING যুক্ত করা হলো
+  const kpiDelivered = orders.filter(o => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(o.status?.toUpperCase())).length;
   const kpiCancelled = orders.filter(o => ['RETURNED', 'CANCELLED'].includes(o.status?.toUpperCase())).length;
 
-  // 🚀 ফিল্টারিং লজিক
   const filteredParcels = orders.filter(order => {
     const courierName = getCourierName(order);
     if (activeTab !== "All" && courierName !== activeTab) return false;
@@ -187,9 +191,9 @@ export default function CourierPage() {
       if (kpiFilter === "IN REVIEW") {
         if (s !== 'IN_REVIEW') return false;
       } else if (kpiFilter === "PENDING") {
-        if (s === 'IN_REVIEW' || ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'CANCELLED'].includes(s)) return false;
+        if (s === 'IN_REVIEW' || ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING', 'RETURNED', 'CANCELLED'].includes(s)) return false;
       } else if (kpiFilter === "DELIVERED") {
-        if (!['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return false;
+        if (!['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(s)) return false;
       } else if (kpiFilter === "CANCELLED") {
         if (!['RETURNED', 'CANCELLED'].includes(s)) return false;
       }
@@ -283,7 +287,7 @@ export default function CourierPage() {
         
         <div className="flex justify-center mt-3">
           <span className={`text-[10px] sm:text-[11px] font-bold px-3 py-1 border rounded-full flex items-center gap-1.5 uppercase shadow-sm ${getStatusColor(selectedParcel.status)}`}>
-            {getStatusIcon(selectedParcel.status)} {getMappedStatus(selectedParcel.status)}
+            {getStatusIcon(selectedParcel.status)} {selectedParcel.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : getMappedStatus(selectedParcel.status)}
           </span>
         </div>
       </div>
@@ -387,7 +391,6 @@ export default function CourierPage() {
         </div>
       </div>
 
-      {/* ================= KPI CARDS ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-6">
         {[
           { key: "IN REVIEW", label: "IN REVIEW", value: kpiInReview, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
@@ -482,13 +485,14 @@ export default function CourierPage() {
                 const statusClasses = getStatusColor(parcel.status);
                 const courierName = getCourierName(parcel);
                 const displayId = parcel.consignmentId || parcel.trackingCode || parcel.id;
+                const isApprovalPending = parcel.status?.toUpperCase() === 'DELIVERED_APPROVAL_PENDING';
                 
                 return (
                   <div 
                     key={parcel.id} 
                     onClick={() => handleParcelClick(parcel)}
                     className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-3.5 rounded-xl border-2 cursor-pointer transition-all gap-2 sm:gap-3 ${
-                      isSelected ? "border-[#3b82f6] dark:border-blue-500/60 bg-blue-50/50 dark:bg-blue-500/10 shadow-sm" : "border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] hover:border-gray-200 dark:hover:border-white/10"
+                      isSelected ? "border-[#3b82f6] dark:border-blue-500/60 bg-blue-50/50 dark:bg-blue-500/10 shadow-sm" : "border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] hover:border-gray-200 dark:hover:border-white/10"
                     }`}
                   >
                     <div className="flex items-start gap-3 sm:gap-4">
@@ -509,7 +513,7 @@ export default function CourierPage() {
                         {getOnlyDate(parcel.createdAt)}
                       </span>
                       <span className={`text-[9px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 border rounded-full flex items-center gap-1 uppercase ${statusClasses}`}>
-                        {getStatusIcon(parcel.status)} {getMappedStatus(parcel.status)}
+                        {getStatusIcon(parcel.status)} {isApprovalPending ? 'DELIVERED (PENDING)' : getMappedStatus(parcel.status)}
                       </span>
                     </div>
                   </div>
@@ -532,8 +536,8 @@ export default function CourierPage() {
 
       </div>
 
-      {isMobileDrawerOpen && selectedParcel && (
-        <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      {isMobileDrawerOpen && selectedParcel && isMounted && createPortal(
+        <div className="lg:hidden fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
             
             <button 
@@ -545,7 +549,8 @@ export default function CourierPage() {
             
             {renderTrackingDetails()}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

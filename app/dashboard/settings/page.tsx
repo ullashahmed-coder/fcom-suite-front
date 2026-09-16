@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   Settings, Store, Truck, CreditCard, 
   Bell, Shield, Save, Globe, Phone, Mail, 
   MapPin, CheckCircle2, Key, Link as LinkIcon,
   Database, HardDrive, DownloadCloud, FileDown, 
-  MessageSquare, Image as ImageIcon, Loader2
+  MessageSquare, Image as ImageIcon, Loader2, ArrowLeft
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -16,7 +17,6 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 🚀 পাসওয়ার্ড চেঞ্জের জন্য নতুন স্টেট
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isUpdatingPass, setIsUpdatingPass] = useState(false);
@@ -120,7 +120,7 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error("Password change error:", error);
-      alert("সার্ভার এরর! পাসওয়ার্ড পরিবর্তন করা যায়নি।");
+      alert("সার্ভার এরর! পাসওয়ার্ড পরিবর্তন করা যায়নি।");
     } finally {
       setIsUpdatingPass(false);
     }
@@ -183,26 +183,20 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
-        // 🚀 ১. লোকাল স্টোরেজ পারফেক্টলি আপডেট করা
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const userObj = JSON.parse(storedUser);
-          
           userObj.shopName = settingsToSave.storeName; 
-          // শপের মেইন অবজেক্টেও নাম আপডেট করে দেওয়া (যাতে লেআউট সঠিক নাম পায়)
           if (userObj.shop) {
             userObj.shop.name = settingsToSave.storeName;
           }
-          
           localStorage.setItem("user", JSON.stringify(userObj));
         }
 
-        // 🚀 ২. লেআউটকে রিয়েল-টাইম আপডেট করার ইভেন্ট পাঠানো
         window.dispatchEvent(new Event("shopUpdated"));
 
         if (showFeedback) {
           alert("✅ সব সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে!");
-          // রিলোড করার আর কোনো দরকার নেই, ম্যাজিকের মতো লাইভ চেঞ্জ হয়ে যাবে!
         }
       } else {
         if (showFeedback) alert("❌ সেটিংস সেভ করা সম্ভব হয়নি।");
@@ -310,20 +304,32 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6 font-sans transition-colors duration-300">
+    <div className="max-w-[1500px] mx-auto pb-24 xl:pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6 font-sans transition-colors duration-300 relative">
       
+      {/* ================= Page Header with Back Button ================= */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 sm:mb-6 gap-3 sm:gap-4 bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm transition-colors">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Settings className="text-emerald-600 dark:text-emerald-500" size={24} /> Settings <span className="hidden sm:inline">& Configurations</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your store preferences, integrations, security, and backups.</p>
+        
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Link
+            href="/dashboard/mobile"
+            className="p-2 sm:p-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20 text-slate-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl transition-all shadow-sm shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <Settings className="text-emerald-600 dark:text-emerald-500 hidden sm:block" size={24} /> 
+              Settings <span className="hidden sm:inline">& Configurations</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your store preferences, integrations, security, and backups.</p>
+          </div>
         </div>
         
         <button 
           onClick={() => handleSaveAll(settings, true)}
           disabled={isSaving}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors disabled:opacity-50 shrink-0"
+          className="hidden sm:flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors disabled:opacity-50 shrink-0"
         >
           {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} Save <span className="hidden sm:inline">All</span> Changes
         </button>
@@ -344,13 +350,13 @@ export default function SettingsPage() {
                     : "bg-transparent border-2 border-transparent hover:bg-gray-50 dark:hover:bg-white/5"
                 }`}
               >
-<div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-  activeTab === tab.id 
-    ? "bg-emerald-600 text-white" 
-    : "bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-gray-400"
-}`}>
-  {tab.icon}
-</div>
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                  activeTab === tab.id 
+                    ? "bg-emerald-600 text-white" 
+                    : "bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-gray-400"
+                }`}>
+                  {tab.icon}
+                </div>
                 <div>
                   <h3 className={`text-[12px] sm:text-[14px] font-bold ${activeTab === tab.id ? "text-emerald-700 dark:text-emerald-400" : "text-slate-700 dark:text-gray-200"}`}>
                     {tab.label}
@@ -364,7 +370,7 @@ export default function SettingsPage() {
 
         <div className="lg:col-span-8 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors overflow-hidden">
           
-{/* ----- 1. GENERAL & BRANDING ----- */}
+          {/* ----- 1. GENERAL & BRANDING ----- */}
           {activeTab === "general" && (
             <div className="animate-in fade-in duration-200">
               <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-white/10">
@@ -789,7 +795,6 @@ export default function SettingsPage() {
               
               <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
                 
-                {/* 🚀 ফিক্সড: পাসওয়ার্ড চেঞ্জ করার ফর্ম */}
                 <div>
                   <h3 className="text-[13px] sm:text-[14px] font-bold text-slate-800 dark:text-white mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
                     <Key size={14} className="text-emerald-500 sm:w-[16px] sm:h-[16px]"/> Change Password
@@ -851,6 +856,24 @@ export default function SettingsPage() {
 
         </div>
       </div>
+
+      {/* ================= 🚀 FLOATING ACTION BUTTON (FAB) FOR MOBILE ================= */}
+      <div className="sm:hidden fixed bottom-4 left-4 right-4 z-[9999]">
+        <button
+          type="button"
+          onClick={() => handleSaveAll(settings, true)}
+          disabled={isSaving}
+          className={`w-full py-3.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-xl backdrop-blur-sm ${
+            !isSaving
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 dark:shadow-none'
+              : 'bg-slate-200/90 dark:bg-white/10 text-slate-500 dark:text-gray-400 cursor-not-allowed border border-slate-300/50 dark:border-white/5'
+          }`}
+        >
+          {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+          Save Changes
+        </button>
+      </div>
+
     </div>
   );
 }

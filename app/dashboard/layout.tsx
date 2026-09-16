@@ -136,14 +136,20 @@ function NavList({ items, pathname, onNavigate, userPermissions, userRole }: { i
 
 /* ===================== MOBILE BOTTOM NAV ===================== */
 
+/* ===================== MOBILE BOTTOM NAV ===================== */
+
 function MobileBottomNav() {
   const pathname = usePathname();
 
-  // 🚀 যদি ইউজার অর্ডার ক্রিয়েট পেজে বা এমন কোনো পেজে থাকে যেখানে কনফার্ম বাটন ঢাকা পড়ে, তবে নেভবার হাইড থাকবে
-  const shouldHideNav = pathname.includes("/orders/create") || pathname.includes("/create");
+  // 🚀 সেটিংস পেজ যোগ করা হলো
+  const shouldHideNav = 
+    pathname.includes("/orders/create") || 
+    pathname.includes("/create") || 
+    pathname.includes("/edit") || 
+    pathname.includes("/settings"); // <-- এই অংশটুকু যোগ করা হয়েছে
 
   if (shouldHideNav) {
-    return null; // এই পেজগুলোতে নেভবার রেন্ডার হবে না
+    return null;
   }
 
   const navItems = [
@@ -155,7 +161,6 @@ function MobileBottomNav() {
   ];
 
   return (
-    // 🚀 এখানে id="mobile-bottom-nav" যোগ করা হয়েছে
     <div id="mobile-bottom-nav" className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a2421] border-t border-gray-200 dark:border-white/10 px-4 py-2.5 flex justify-around items-center z-50 md:hidden shadow-2xl">
       {navItems.map((item) => {
         const isActive = pathname === item.href;

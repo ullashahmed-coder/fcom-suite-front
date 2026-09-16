@@ -7,6 +7,11 @@ import { ShoppingBag, Package, RotateCcw, Box, Home } from "lucide-react";
 export default function MobileBottomNav() {
   const pathname = usePathname();
 
+  // 🚀 যদি লিংকের মধ্যে /edit বা /create থাকে, তাহলে এই ন্যাপবারটি হাইড হয়ে যাবে
+  if (pathname.includes("/edit") || pathname.includes("/create")) {
+    return null;
+  }
+
   const navItems = [
     { label: "Home", href: "/dashboard/mobile", icon: <Home size={20} /> },
     { label: "Orders", href: "/dashboard/orders", icon: <ShoppingBag size={20} /> },

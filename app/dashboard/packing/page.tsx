@@ -1,5 +1,6 @@
 "use client"
 
+import { createPortal } from "react-dom";
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -28,13 +29,19 @@ export default function MixedPackingDashboard() {
 
   const [userRole, setUserRole] = useState<string>("")
   
-  // 🚀 ডিফল্টভাবে 'all' করা হয়েছে যাতে আগের সব হিস্ট্রি বা প্যাক করা ডাটা দেখা যায়
+  // 🚀 ডিফল্টভাবে 'all' করা হয়েছে যাতে আগের সব হিস্ট্রি বা প্যাক করা ডাটা দেখা যায়
   const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'all' | 'custom'>('all')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
 
   const [searchQuery, setSearchQuery] = useState("")
   const [packedSearchQuery, setPackedSearchQuery] = useState("")
+  
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
 
@@ -56,22 +63,19 @@ export default function MixedPackingDashboard() {
         const validOrders = data.filter((o: any) => !o.isDeleted);
         setOrders(validOrders)
 
-        // 🚀 ১. Packing Queue: শুধুমাত্র যেগুলো প্যাকিংয়ের অপেক্ষায় আছে (IN_REVIEW, BOOKED, PENDING)
-        // 🚀 ১. Packing Queue: কেবল সেই অর্ডারগুলোই আসবে যেগুলো কুরিয়ারে বুকিং করা হয়েছে (CN / Consignment ID আছে) এবং এখনো প্যাক করা হয়নি
+        // 🚀 ১. Packing Queue: কেবল সেই অর্ডারগুলোই আসবে যেগুলো কুরিয়ারে বুকিং করা হয়েছে (CN / Consignment ID আছে) এবং এখনো প্যাক করা হয়নি
         const inReview = validOrders.filter((o: any) => {
           const s = o.status?.toUpperCase() || "";
           const hasConsignment = Boolean(o.consignmentId || o.trackingCode);
           
-          // বুকিং করা হয়েছে (CN আছে) কিন্তু এখনো প্যাক বা ডিসপাচ হয়নি
           return hasConsignment && ['IN_REVIEW', 'BOOKED', 'PENDING', 'COURIER_PENDING'].includes(s);
         });
         setToPackOrders(inReview);
         if (inReview.length > 0 && !selectedOrder) setSelectedOrder(inReview[0]);
 
-        // 🚀 ২. Packed History: যেগুলো ইতিমধ্যে প্যাক করা হয়েছে অথবা কুরিয়ার বা অন্য কোনো স্ট্যাটাসে চলে গেছে, সেগুলোর হিস্ট্রি সবসময় সে থাকবে
+        // 🚀 ২. Packed History: যেগুলো ইতিমধ্যে প্যাক করা হয়েছে অথবা কুরিয়ার বা অন্য কোনো স্ট্যাটাসে চলে গেছে
         const packedHistory = validOrders.filter((o: any) => {
           const s = o.status?.toUpperCase() || "";
-          // প্যাক করা বা এর পরের যেকোনো স্ট্যাটাসের অর্ডার হিস্ট্রিতে দেখাবে
           return s !== 'IN_REVIEW' && s !== 'BOOKED' && s !== 'PENDING' && !['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(s);
         });
         setAllPackedOrders(packedHistory.reverse());
@@ -357,7 +361,7 @@ export default function MixedPackingDashboard() {
   const renderHistoryDetails = () => (
     <>
       <div className="bg-slate-50 dark:bg-[#141d1a] p-4 sm:p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
-        <div className="absolute top-3 right-3 sm:top-4 sm:right-4">
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
           {getDynamicStatusBadge(selectedPackedOrder.status)}
         </div>
         <p className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-3 sm:mt-2">Steadfast Parcel ID</p>
@@ -739,23 +743,26 @@ export default function MixedPackingDashboard() {
       )}
 
       {/* ================= MOBILE DRAWER FOR QUEUE ================= */}
-      {isQueueDrawerOpen && selectedOrder && activeTab === 'queue' && (
-        <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      {isQueueDrawerOpen && selectedOrder && isMounted && createPortal(
+        <div className="lg:hidden fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
+            
             <button 
               onClick={() => setIsQueueDrawerOpen(false)} 
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition-colors"
+              className="absolute top-4 right-4 z-20 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition-colors"
             >
-              <X size={18} className="text-slate-700 dark:text-white" />
+              <X size={20} className="text-slate-700 dark:text-white" />
             </button>
+            
             {renderQueueDetails()}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= MOBILE DRAWER FOR HISTORY ================= */}
-      {isHistoryDrawerOpen && selectedPackedOrder && activeTab === 'history' && (
-        <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      {isHistoryDrawerOpen && selectedPackedOrder && activeTab === 'history' && isMounted && createPortal(
+        <div className="lg:hidden fixed inset-0 z-[99999] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
             <button 
               onClick={() => setIsHistoryDrawerOpen(false)} 
@@ -765,7 +772,8 @@ export default function MixedPackingDashboard() {
             </button>
             {renderHistoryDetails()}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

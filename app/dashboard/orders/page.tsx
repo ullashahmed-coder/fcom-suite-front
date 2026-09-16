@@ -17,7 +17,7 @@ export default function OrdersPage() {
   const [isBulkBooking, setIsBulkBooking] = useState(false);
 
   const [activeTab, setActiveTab] = useState("All orders");
-  const [timeFilter, setTimeFilter] = useState("ALL"); // ALL, 30D, 7D, YESTERDAY, TODAY
+  const [timeFilter, setTimeFilter] = useState("ALL"); 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   const [selectedOrder, setSelectedOrder] = useState<any>(null); 
@@ -226,13 +226,14 @@ export default function OrdersPage() {
   const returnStatuses = ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'];
   const visibleOrders = orders.filter(o => !o.isDeleted);
 
+  // 🚀 ফিক্সড: DELIVERED_APPROVAL_PENDING এখন Delivered ট্যাবে কাউন্ট হবে
   const tabConfigs = [
     { label: "All orders", status: "All orders", count: visibleOrders.length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
     { label: "New orders", status: "PENDING", count: visibleOrders.filter(o => o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
     { label: "Review", status: "IN_REVIEW", count: visibleOrders.filter(o => o.status === 'IN_REVIEW').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
     { label: "Packed", status: "PACKED", count: visibleOrders.filter(o => o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
-    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || o.status === 'SHIPPED' || o.status === 'IN_TRANSIT' || o.status === 'DELIVERED_APPROVAL_PENDING' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
-    { label: "Delivered", status: "DELIVERED", count: visibleOrders.filter(o => o.status === 'DELIVERED').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
+    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || o.status === 'SHIPPED' || o.status === 'IN_TRANSIT' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
+    { label: "Delivered", status: "DELIVERED", count: visibleOrders.filter(o => o.status === 'DELIVERED' || o.status === 'DELIVERED_APPROVAL_PENDING').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
     { label: "Cancel", status: "RETURNED_CANCELLED", count: visibleOrders.filter(o => returnStatuses.includes(o.status?.toUpperCase()) && o.isRestocked).length, colorClass: "text-red-500 dark:text-red-400", borderClass: "border-red-200 dark:border-red-400/30", bgClass: "bg-red-50 dark:bg-red-500/10", ringClass: "ring-red-500" },
     { label: "Trash", status: "TRASH", count: orders.filter(o => o.isDeleted).length, colorClass: "text-gray-500 dark:text-gray-400", borderClass: "border-gray-200 dark:border-gray-500/30", bgClass: "bg-gray-50 dark:bg-gray-500/10", ringClass: "ring-gray-400" },
   ];
@@ -245,14 +246,20 @@ export default function OrdersPage() {
     }
 
     let matchesTab = false;
+    const statusUpper = order.status?.toUpperCase();
+
     if (activeTab === "All orders" || activeTab === "Trash") {
       matchesTab = true;
     } else if (activeTab === "Cancel") {
-      matchesTab = returnStatuses.includes(order.status?.toUpperCase()) && order.isRestocked;
+      matchesTab = returnStatuses.includes(statusUpper) && order.isRestocked;
     } else if (activeTab === "Pending") {
-      matchesTab = order.status === "COURIER_PENDING" || order.status === "SHIPPED" || order.status === "IN_TRANSIT" || order.status === "DELIVERED_APPROVAL_PENDING" || (returnStatuses.includes(order.status?.toUpperCase()) && !order.isRestocked);
+      // 🚀 DELIVERED_APPROVAL_PENDING এখানে থেকে বাদ দেওয়া হলো
+      matchesTab = statusUpper === "COURIER_PENDING" || statusUpper === "SHIPPED" || statusUpper === "IN_TRANSIT" || (returnStatuses.includes(statusUpper) && !order.isRestocked);
+    } else if (activeTab === "Delivered") {
+      // 🚀 Delivered ট্যাবে সাধারণ Delivered এবং Approval Pending দুটোই দেখাবে
+      matchesTab = statusUpper === "DELIVERED" || statusUpper === "DELIVERED_APPROVAL_PENDING";
     } else {
-      matchesTab = order.status === tabConfigs.find(t => t.label === activeTab)?.status;
+      matchesTab = statusUpper === tabConfigs.find(t => t.label === activeTab)?.status;
     }
 
     const searchLower = searchQuery.toLowerCase();
@@ -267,7 +274,6 @@ export default function OrdersPage() {
     let matchesDate = true;
     const now = new Date();
     
-    // Yesterday Date Setup
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
 
@@ -322,7 +328,7 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen relative overflow-hidden transition-colors">
       
-      {/* ================= HEADER (Light/Dark Mode Fixed) ================= */}
+      {/* ================= HEADER ================= */}
       <div className="flex flex-row justify-between items-center bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm gap-2 transition-colors">
         <div className="min-w-0">
           <h1 className="text-base sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight truncate">Orders Management</h1>
@@ -363,7 +369,7 @@ export default function OrdersPage() {
           })}
         </div>
 
-        {/* ================= TOOLBAR WITH QUICK TIME FILTERS ================= */}
+        {/* ================= TOOLBAR ================= */}
         <div className="bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors">
           <div className="relative w-full xl:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
@@ -399,7 +405,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* ================= BULK ACTIONS & SELECT ALL ================= */}
+        {/* ================= BULK ACTIONS ================= */}
         <div className="flex items-center justify-between bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 transition-colors">
           <div className="flex items-center gap-3 ml-2">
             <input
@@ -491,8 +497,9 @@ export default function OrdersPage() {
                       </div>
                       
                       <div className="flex flex-col items-end gap-1.5">
+                        {/* 🚀 ফিক্সড: DELIVERED_APPROVAL_PENDING কে ছোট করে সুন্দর ব্যাজ করা হলো */}
                         <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
-                          {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status === 'SHIPPED' || order.status === 'IN_TRANSIT' ? 'PENDING' : order.status}
+                          {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : order.status === 'SHIPPED' || order.status === 'IN_TRANSIT' ? 'PENDING' : order.status}
                         </span>
                         {order.isRestocked && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10" title="This order has been restocked to inventory">
@@ -528,7 +535,7 @@ export default function OrdersPage() {
                     <span className="text-[11px] text-slate-500 dark:text-gray-400 font-medium">{orderItemsCount} Items</span>
                   </div>
 
-                  {/* Card Footer (Actions) */}
+                  {/* Card Footer */}
                   <div className="p-4 pt-2 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center">
                     <button 
                       onClick={() => setSelectedOrder(order)}
@@ -580,7 +587,7 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* ================= RIGHT DRAWER (Order Details) ================= */}
+      {/* ================= RIGHT DRAWER ================= */}
       {selectedOrder && mounted && createPortal(
         <>
           <div 
@@ -609,7 +616,7 @@ export default function OrdersPage() {
                 
                 <div className="flex flex-col items-end gap-1.5 mt-1">
                   <span className="text-[10px] font-bold px-3 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded-full uppercase bg-white dark:bg-teal-500/10 shadow-sm">
-                    {selectedOrder.status === 'PENDING' ? 'NEW ORDERS' : selectedOrder.status === 'IN_REVIEW' ? 'IN REVIEW' : selectedOrder.status}
+                    {selectedOrder.status === 'PENDING' ? 'NEW ORDERS' : selectedOrder.status === 'IN_REVIEW' ? 'IN REVIEW' : selectedOrder.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : selectedOrder.status}
                   </span>
                   {selectedOrder.isRestocked && (
                     <span className="text-[9px] font-bold px-2 py-1 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full uppercase bg-emerald-50 dark:bg-emerald-500/10 shadow-sm flex items-center gap-1">
@@ -620,7 +627,7 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Drawer Scrollable Content */}
+            {/* Drawer Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
               
               {/* Customer Info */}
