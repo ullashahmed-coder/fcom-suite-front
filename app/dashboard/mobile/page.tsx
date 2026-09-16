@@ -71,20 +71,22 @@ export default function TenantDashboardHome() {
         activeOrders.forEach((o: any) => {
           tot++;
           const amount = Number(o.totalAmount) || 0;
-          const status = o.status?.toUpperCase();
+          const status = o.status?.toUpperCase() || "";
 
           if (o.createdAt && new Date(o.createdAt).toDateString() === todayString) {
             ordersToday++;
             salesToday += amount;
           }
 
-          if (status === 'DELIVERED') {
+          // 🚀 ফিক্সড: Order এবং Courier পেজের লজিকের সাথে ড্যাশবোর্ডের লজিক মেলানো হলো
+          if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(status)) {
             del++;
             delAmt += amount;
-          } else if (status === 'CANCELLED' || status === 'RETURNED') {
+          } else if (['CANCELLED', 'RETURNED'].includes(status)) {
             canc++;
             cancAmt += amount;
           } else {
+            // PENDING, IN_REVIEW, SHIPPED, IN_TRANSIT, PACKED, etc.
             pend++;
             pendAmt += amount;
           }
