@@ -27,11 +27,9 @@ export default function TenantDashboardHome() {
     cancelledAmount: 0
   });
 
-  // Order Limit Logic (For Free Tier)
-  const MAX_MONTHLY_ORDERS = 50; 
-  const currentOrdersCount = orders.length;
-  const remainingOrders = Math.max(0, MAX_MONTHLY_ORDERS - currentOrdersCount);
-  const showUpgradeBanner = remainingOrders <= 10; 
+  // 🚀 ডাইনামিক লিমিট স্টোর করার জন্য স্টেট
+  const [usageOrders, setUsageOrders] = useState(0);
+  const [totalOrderLimit, setTotalOrderLimit] = useState(50); // ডিফল্ট
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -50,13 +48,25 @@ export default function TenantDashboardHome() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
-      const [prodRes, orderRes] = await Promise.all([
+      // 🚀 ব্যাকএন্ড থেকে usage API ও একসাথে কল করা হচ্ছে
+      const [prodRes, orderRes, usageRes] = await Promise.all([
         fetch(`${apiUrl}/products`, { headers }),
-        fetch(`${apiUrl}/orders`, { headers })
+        fetch(`${apiUrl}/orders`, { headers }),
+        fetch(`${apiUrl}/billing/usage`, { headers })
       ]);
+
+      // ১. Usage ও Limit ডাটা সেট করা
+      if (usageRes.ok) {
+        const usageData = await usageRes.json();
+        if (usageData.success) {
+          setUsageOrders(usageData.usageOrders);
+          setTotalOrderLimit(usageData.totalOrderLimit);
+        }
+      }
 
       let allOrdersData: any[] = [];
 
+      // ২. অর্ডার ডাটা প্রসেস করা
       if (orderRes.ok) {
         allOrdersData = await orderRes.json();
         const activeOrders = allOrdersData.filter((o: any) => !o.isDeleted);
@@ -78,7 +88,6 @@ export default function TenantDashboardHome() {
             salesToday += amount;
           }
 
-          // 🚀 ফিক্সড: Order এবং Courier পেজের লজিকের সাথে ড্যাশবোর্ডের লজিক মেলানো হলো
           if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(status)) {
             del++;
             delAmt += amount;
@@ -86,7 +95,6 @@ export default function TenantDashboardHome() {
             canc++;
             cancAmt += amount;
           } else {
-            // PENDING, IN_REVIEW, SHIPPED, IN_TRANSIT, PACKED, etc.
             pend++;
             pendAmt += amount;
           }
@@ -105,7 +113,7 @@ export default function TenantDashboardHome() {
         });
       }
 
-      // Process Best Selling Products
+      // ৩. বেস্ট সেলিং প্রোডাক্ট প্রসেস করা
       if (prodRes.ok) {
         const prods = await prodRes.json();
         
@@ -145,6 +153,10 @@ export default function TenantDashboardHome() {
       setLoading(false);
     }
   };
+
+  // 🚀 ডাইনামিক ব্যানার লজিক: লিমিট -১ (Unlimited) হলে কখনোই ব্যানার দেখাবে না
+  const remainingOrders = totalOrderLimit === -1 ? 'Unlimited' : Math.max(0, totalOrderLimit - usageOrders);
+  const showUpgradeBanner = totalOrderLimit !== -1 && (remainingOrders as number) <= 10;
 
   return (
     <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f1714] text-slate-800 dark:text-white pb-28 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
