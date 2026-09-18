@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  CreditCard, Crown, CheckCircle2, Zap, Rocket, // 🚀 Rocket আইকন যুক্ত করা হলো
+  CreditCard, Crown, CheckCircle2, Zap, Rocket, 
   Download, Clock, Package, Users, HardDrive, Loader2, X, Copy, ArrowRight, ShieldAlert
 } from "lucide-react";
 
@@ -24,6 +24,7 @@ export default function BillingSubscriptionPage() {
   });
 
   const [usageOrders, setUsageOrders] = useState(0); 
+  const [totalOrderLimit, setTotalOrderLimit] = useState(0); // 🚀 নতুন: রোলওভার লিমিট সেভ করার জন্য
   const [usageStaff, setUsageStaff] = useState(0);
   const [usageProducts, setUsageProducts] = useState(0);
 
@@ -44,6 +45,7 @@ export default function BillingSubscriptionPage() {
         const data = await res.json();
         if (data.success) {
           setUsageOrders(data.usageOrders);
+          setTotalOrderLimit(data.totalOrderLimit); // 🚀 ব্যাকএন্ড থেকে আসা ডাইনামিক লিমিট
           setUsageStaff(data.usageStaff);
           setUsageProducts(data.usageProducts);
         }
@@ -213,10 +215,11 @@ export default function BillingSubscriptionPage() {
       });
 
       if (res.ok) {
-        alert("✅ Payment submitted! Your plan will be active once verified by an admin.");
+        alert("✅ Payment verified! Your new plan and order limits have been activated.");
         setIsPaymentModalOpen(false);
         setTransactionId("");
         fetchBillingData();
+        fetchUsageStats(); // 🚀 পেমেন্টের পর ইউজ স্ট্যাটস আবার ফেচ করা হবে
       } else {
         const err = await res.json();
         alert(`❌ Failed: ${err.message}`);
@@ -248,13 +251,13 @@ export default function BillingSubscriptionPage() {
   const isActive = planInfo?.status === "ACTIVE";
   const isPastDue = planInfo?.status === "PAST_DUE" || planInfo?.status === "SUSPENDED";
   
-  const limitOrders = currentPlanName === 'Trial' ? 50 : (dynamicPlans[currentPlanName]?.orders === -1 ? -1 : dynamicPlans[currentPlanName]?.orders || 300);
-  const percentOrders = limitOrders !== -1 && limitOrders > 0 ? Math.min((usageOrders / limitOrders) * 100, 100).toFixed(1) : "0";
+  // 🚀 ডাইনামিক লিমিট ব্যবহার করা হচ্ছে
+  const activeOrderLimit = totalOrderLimit > 0 ? totalOrderLimit : (currentPlanName === 'Trial' ? 50 : (dynamicPlans[currentPlanName]?.orders || 300));
+  const percentOrders = activeOrderLimit !== -1 ? Math.min((usageOrders / activeOrderLimit) * 100, 100).toFixed(1) : "0";
   
   const limitStaff = currentPlanName === 'Trial' ? 2 : (dynamicPlans[currentPlanName]?.staff === -1 ? -1 : dynamicPlans[currentPlanName]?.staff || 2);
   const percentStaff = limitStaff !== -1 && limitStaff > 0 ? Math.min((usageStaff / limitStaff) * 100, 100).toFixed(1) : "0";
   
-  const limitProducts = -1;
   const percentProducts = "0";
 
   const getButtonText = (targetPlanName: string, targetWeight: number) => {
@@ -353,9 +356,11 @@ export default function BillingSubscriptionPage() {
               <div className="flex justify-between items-end mb-2">
                 <div className="flex items-center gap-2">
                   <Package size={16} className="text-gray-400" />
-                  <span className="text-[13px] font-bold text-slate-700 dark:text-gray-200">Monthly Orders</span>
+                  <span className="text-[13px] font-bold text-slate-700 dark:text-gray-200">Monthly Orders {activeOrderLimit > (dynamicPlans[currentPlanName]?.orders || 300) && <span className="text-xs text-indigo-500 ml-1">(Rolled Over)</span>}</span>
                 </div>
-                <span className="text-[12px] font-bold text-slate-800 dark:text-white">{usageOrders} / {limitOrders === -1 ? 'Unlimited' : limitOrders}</span>
+                <span className="text-[12px] font-bold text-slate-800 dark:text-white">
+                  {usageOrders} / {activeOrderLimit === -1 ? 'Unlimited' : activeOrderLimit}
+                </span>
               </div>
               <div className="w-full h-2.5 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full ${Number(percentOrders) > 90 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${percentOrders}%` }}></div>
@@ -397,7 +402,7 @@ export default function BillingSubscriptionPage() {
       <div id="pricing-plans-section" className="bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm p-6 lg:p-10 mb-8 transition-colors">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h2 className="text-2xl font-extrabold text-slate-800 dark:text-white mb-3">Simple, Transparent Pricing</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Choose the plan that fits your business needs. You can upgrade or downgrade at any time.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Choose the plan that fits your business needs. Upgrade any time and carry forward your unused limits.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -407,12 +412,9 @@ export default function BillingSubscriptionPage() {
             {currentWeight === 1 && (
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-violet-500 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Current Plan</div>
             )}
-            
-            {/* 🚀 ফিক্স: Basic আইকন যোগ করা হলো */}
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
               <Zap size={18} className="text-blue-500" /> Basic
             </h3>
-            
             <p className="text-[13px] text-gray-500 dark:text-gray-400 mb-4 h-10">Perfect for small businesses just getting started.</p>
             <div className="mb-6">
               <span className="text-3xl font-extrabold text-slate-800 dark:text-white">৳ {dynamicPlans["Basic"]?.price}</span>
@@ -431,8 +433,6 @@ export default function BillingSubscriptionPage() {
                 </li>
               ))}
             </ul>
-            
-            {/* 🚀 ফিক্স: বাটন স্টাইল ইউনিফর্ম করা হলো */}
             <button 
               onClick={() => handlePlanChangeClick("Basic", "monthly")}
               disabled={isButtonDisabled(1)}
@@ -451,12 +451,9 @@ export default function BillingSubscriptionPage() {
             {currentWeight === 2 && (
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-violet-500 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Current Plan</div>
             )}
-            
-            {/* 🚀 ফিক্স: Pro আইকন আপডেট করা হলো */}
             <h3 className="text-lg font-bold text-violet-700 dark:text-violet-400 mb-2 flex items-center gap-2">
               <Rocket size={18} className="text-violet-500" /> Pro
             </h3>
-            
             <p className="text-[13px] text-gray-600 dark:text-gray-400 mb-4 h-10">Everything you need to scale your growing store.</p>
             <div className="mb-6">
               <span className="text-3xl font-extrabold text-slate-800 dark:text-white">৳ {dynamicPlans["Pro"]?.price}</span>
@@ -475,8 +472,6 @@ export default function BillingSubscriptionPage() {
                 </li>
               ))}
             </ul>
-            
-            {/* 🚀 ফিক্স: বাটন স্টাইল ইউনিফর্ম করা হলো */}
             <button 
               onClick={() => handlePlanChangeClick("Pro", "monthly")}
               disabled={isButtonDisabled(2)}
@@ -495,12 +490,9 @@ export default function BillingSubscriptionPage() {
             {currentWeight === 3 && (
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-violet-500 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Current Plan</div>
             )}
-            
-            {/* 🚀 ফিক্স: Elite আইকন যোগ করা হলো */}
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
               <Crown size={18} className="text-amber-500" /> Elite
             </h3>
-            
             <p className="text-[13px] text-gray-500 dark:text-gray-400 mb-4 h-10">For high-volume merchants needing maximum power.</p>
             <div className="mb-6">
               <span className="text-3xl font-extrabold text-slate-800 dark:text-white">৳ {dynamicPlans["Elite"]?.price}</span>
@@ -519,8 +511,6 @@ export default function BillingSubscriptionPage() {
                 </li>
               ))}
             </ul>
-            
-            {/* 🚀 ফিক্স: বাটন স্টাইল ইউনিফর্ম করা হলো */}
             <button 
               onClick={() => handlePlanChangeClick("Elite", "monthly")}
               disabled={isButtonDisabled(3)}
@@ -618,7 +608,8 @@ export default function BillingSubscriptionPage() {
 
             <div className="p-6">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                You are about to {currentWeight > (planWeights[targetPlan.name] || 1) ? 'downgrade' : 'upgrade'} your subscription. Please review the changes below before confirming.
+                You are about to {currentWeight > (planWeights[targetPlan.name] || 1) ? 'downgrade' : 'upgrade'} your subscription. 
+                <span className="block mt-1 font-semibold text-indigo-500">Any unused order limits from your current cycle will be rolled over!</span>
               </p>
 
               {/* Comparison Box */}
@@ -643,7 +634,7 @@ export default function BillingSubscriptionPage() {
 
                 <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-white/5">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400">Monthly Orders:</span>
+                    <span className="text-gray-500 dark:text-gray-400">Base Orders:</span>
                     <span className="font-bold text-slate-700 dark:text-gray-300">
                       <span className={currentWeight > (planWeights[targetPlan.name] || 1) ? 'text-rose-500' : ''}>
                         {currentPlanName === 'Trial' ? 50 : (dynamicPlans[currentPlanName]?.orders === -1 ? 'Unlimited' : dynamicPlans[currentPlanName]?.orders)}

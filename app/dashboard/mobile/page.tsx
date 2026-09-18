@@ -203,7 +203,7 @@ export default function TenantDashboardHome() {
               </div>
             </div>
             <Link 
-              href="/dashboard/settings/billing" 
+              href="/dashboard/subscription" 
               className="bg-white hover:bg-orange-50 text-orange-600 px-3.5 py-2 rounded-xl text-[11px] font-bold shadow-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1"
             >
               <Zap size={14} className="fill-orange-600"/> Upgrade
