@@ -308,7 +308,7 @@ export default function MixedPackingDashboard() {
               <p className="text-xs font-black text-amber-800 dark:text-amber-400 flex items-center gap-1.5 mb-1">
                 ⚠️ Special Note (Packing Team)
               </p>
-              <p className="text-[13px] sm:text-sm font-bold text-black-900 dark:text-black-300 leading-relaxed">
+              <p className="text-[13px] sm:text-sm font-bold text-white-900 dark:text-white-300 leading-relaxed">
                 {selectedOrder.customer?.note || selectedOrder.note}
               </p>
             </div>
