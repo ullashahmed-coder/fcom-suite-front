@@ -154,16 +154,18 @@ export default function TenantDashboardHome() {
         const token = localStorage.getItem("access_token");
         const headers = { "Authorization": `Bearer ${token}` };
 
-        // 👉 Fetch Products & Orders simultaneously to calculate actual Best Sellers
+        // 🚀 FIX: Added limit=5000 so the dashboard has enough data to calculate stats
         const [prodRes, orderRes] = await Promise.all([
-          fetch(`${apiUrl}/products`, { headers }),
-          fetch(`${apiUrl}/orders`, { headers })
+          fetch(`${apiUrl}/products?limit=5000`, { headers }),
+          fetch(`${apiUrl}/orders?limit=5000`, { headers })
         ]);
 
         let allOrdersData: any[] = [];
 
         if (orderRes.ok) {
-          allOrdersData = await orderRes.json();
+          const rawOrderData = await orderRes.json();
+          // 🚀 FIX: Extract data array from the paginated response
+          allOrdersData = rawOrderData.data || rawOrderData;
           
           const todayString = new Date().toDateString();
           const todaysOrders = allOrdersData.filter((o: any) => {
@@ -192,7 +194,9 @@ export default function TenantDashboardHome() {
           try {
              const resTeam = await fetch(`${apiUrl}/users`, { headers });
              if (resTeam.ok) {
-               const usersData = await resTeam.json();
+               const usersDataRaw = await resTeam.json();
+               const usersData = usersDataRaw.data || usersDataRaw;
+
                const taskCounts: Record<string, number> = {};
                allOrdersData.forEach((o: any) => {
                  if (!o.isDeleted && o.user?.name) {
@@ -244,7 +248,9 @@ export default function TenantDashboardHome() {
 
         // 👉 Process Products with Order Sales to get True Best Sellers
         if (prodRes.ok) {
-          const prods = await prodRes.json();
+          const rawProds = await prodRes.json();
+          // 🚀 FIX: Handle product pagination if it exists
+          const prods = rawProds.data || rawProds;
           
           const salesById: Record<string, number> = {};
           const salesByName: Record<string, number> = {};
@@ -280,7 +286,9 @@ export default function TenantDashboardHome() {
         try {
            const resLogs = await fetch(`${apiUrl}/activity-logs?limit=5`, { headers });
            if (resLogs.ok) {
-             const logs = await resLogs.json();
+             const rawLogs = await resLogs.json();
+             const logs = rawLogs.data || rawLogs;
+             
              if (logs && logs.length > 0) {
                const formattedLogs = logs.map((log: any, index: number) => ({
                  id: log.id || index,

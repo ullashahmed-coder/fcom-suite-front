@@ -42,9 +42,10 @@ export default function ProductsPage() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
+      // 🚀 FIX: Added limit=5000 for products and orders
       const [prodRes, orderRes, codeRes] = await Promise.all([
-        fetch(`${apiUrl}/products`, { headers }),
-        fetch(`${apiUrl}/orders`, { headers }),
+        fetch(`${apiUrl}/products?limit=5000`, { headers }),
+        fetch(`${apiUrl}/orders?limit=5000`, { headers }),
         fetch(`${apiUrl}/products/store/code`, { headers }) 
       ]);
 
@@ -54,10 +55,15 @@ export default function ProductsPage() {
       }
       
       if (prodRes.ok) {
-        const allProducts = await prodRes.json();
+        const rawProdData = await prodRes.json();
+        // 🚀 FIX: Extract products array safely
+        const allProducts = rawProdData.data || rawProdData;
+        
         let allOrders = [];
         if (orderRes.ok) {
-          allOrders = await orderRes.json();
+          const rawOrderData = await orderRes.json();
+          // 🚀 FIX: Extract orders array safely
+          allOrders = rawOrderData.data || rawOrderData;
         }
 
         const salesById: Record<string, { sold: number; revenue: number }> = {};
@@ -589,11 +595,11 @@ export default function ProductsPage() {
                           )}
                           
                           <button 
-                            onClick={() => handleDelete(product.id)}
-                            className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50/50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
-                          >
-                            <Trash2 size={13} /> Delete
-                          </button>
+  onClick={() => handleDelete(product.isImported ? product.sharedId : product.id)}
+  className="flex items-center justify-center gap-1.5 py-1.5 bg-rose-50/50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-bold transition-colors"
+>
+  <Trash2 size={13} /> Delete
+</button>
                         </>
                       ) : (
                         <>
@@ -708,11 +714,11 @@ export default function ProductsPage() {
 
             <div className="p-5 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-3 shrink-0">
               <button 
-                onClick={() => selectedProduct.isDeleted ? handlePermanentDelete(selectedProduct.id) : handleDelete(selectedProduct.id)}
-                className="py-2.5 rounded-xl border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-              >
-                <Trash2 size={16} /> {selectedProduct.isDeleted ? "Delete Forever" : "Move to Trash"}
-              </button>
+  onClick={() => selectedProduct.isDeleted ? handlePermanentDelete(selectedProduct.isImported ? selectedProduct.sharedId : selectedProduct.id) : handleDelete(selectedProduct.isImported ? selectedProduct.sharedId : selectedProduct.id)}
+  className="py-2.5 rounded-xl border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+>
+  <Trash2 size={16} /> {selectedProduct.isDeleted ? "Delete Forever" : "Move to Trash"}
+</button>
               
               {!selectedProduct.isDeleted ? (
                 !selectedProduct.isImported ? (

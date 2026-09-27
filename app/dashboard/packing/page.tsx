@@ -54,16 +54,18 @@ export default function MixedPackingDashboard() {
   const fetchPackingOrders = async () => {
     try {
       const token = localStorage.getItem("access_token") || localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/orders`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/orders?limit=1000`, { 
         headers: { "Authorization": `Bearer ${token}` }
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const responseData = await response.json()
+        const data = responseData.data || responseData; 
+        
         const validOrders = data.filter((o: any) => !o.isDeleted);
         setOrders(validOrders)
 
-        // 🚀 ১. Packing Queue: কেবল সেই অর্ডারগুলোই আসবে যেগুলো কুরিয়ারে বুকিং করা হয়েছে (CN / Consignment ID আছে) এবং এখনো প্যাক করা হয়নি
+        // 🚀 ১. Packing Queue
         const inReview = validOrders.filter((o: any) => {
           const s = o.status?.toUpperCase() || "";
           const hasConsignment = Boolean(o.consignmentId || o.trackingCode);
@@ -73,7 +75,7 @@ export default function MixedPackingDashboard() {
         setToPackOrders(inReview);
         if (inReview.length > 0 && !selectedOrder) setSelectedOrder(inReview[0]);
 
-        // 🚀 ২. Packed History: যেগুলো ইতিমধ্যে প্যাক করা হয়েছে অথবা কুরিয়ার বা অন্য কোনো স্ট্যাটাসে চলে গেছে
+        // 🚀 ২. Packed History
         const packedHistory = validOrders.filter((o: any) => {
           const s = o.status?.toUpperCase() || "";
           return s !== 'IN_REVIEW' && s !== 'BOOKED' && s !== 'PENDING' && !['CANCEL', 'CANCELLED', 'RETURNED', 'RETURN ACCEPTED'].includes(s);
@@ -300,13 +302,14 @@ export default function MixedPackingDashboard() {
             <p className="flex items-start gap-2"><MapPin size={14} className="text-slate-400 dark:text-gray-500 mt-0.5 shrink-0" /> <span className="leading-snug">{selectedOrder.customer?.address}, {selectedOrder.customer?.district}</span></p>
           </div>
 
-          {selectedOrder.customer?.note && (
+          {/* 🚀 FIXED: Special Note for Packing Team Show Logic */}
+          {(selectedOrder.customer?.note || selectedOrder.note) && (
             <div className="mt-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3 rounded-xl shadow-sm">
               <p className="text-xs font-black text-amber-800 dark:text-amber-400 flex items-center gap-1.5 mb-1">
-                ⚠️ Special Note
+                ⚠️ Special Note (Packing Team)
               </p>
-              <p className="text-[13px] sm:text-sm font-bold text-amber-900 dark:text-amber-300 leading-relaxed">
-                {selectedOrder.customer.note}
+              <p className="text-[13px] sm:text-sm font-bold text-black-900 dark:text-black-300 leading-relaxed">
+                {selectedOrder.customer?.note || selectedOrder.note}
               </p>
             </div>
           )}
@@ -316,7 +319,7 @@ export default function MixedPackingDashboard() {
           <h3 className="text-[11px] sm:text-xs font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5 sm:mb-3">Items to Pack ({selectedOrder.items?.length})</h3>
           <div className="space-y-2.5 sm:space-y-3">
             {selectedOrder.items?.map((item:any, i:number) => (
-              <div key={i} className="flex gap-3 sm:gap-4 items-center p-2.5 sm:p-3 border border-slate-200 dark:border-white/10 rounded-xl shadow-sm bg-white dark:bg-[#141d1a]">
+              <div key={`queue-item-${i}`} className="flex gap-3 sm:gap-4 items-center p-2.5 sm:p-3 border border-slate-200 dark:border-white/10 rounded-xl shadow-sm bg-white dark:bg-[#141d1a]">
                 <img 
                   src={getImageUrl(item.product?.imageUrl || item.product?.thumbnail)} 
                   className="w-14 h-14 sm:w-18 sm:h-18 object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm cursor-zoom-in hover:opacity-80 transition-opacity shrink-0"
@@ -378,13 +381,25 @@ export default function MixedPackingDashboard() {
             <p className="flex items-center gap-2"><Phone size={14} className="text-slate-400 dark:text-gray-500 shrink-0" /> {selectedPackedOrder.customer?.phone}</p>
             <p className="flex items-start gap-2"><MapPin size={14} className="text-slate-400 dark:text-gray-500 mt-0.5 shrink-0" /> <span className="leading-snug">{selectedPackedOrder.customer?.address}, {selectedPackedOrder.customer?.district}</span></p>
           </div>
+
+          {/* 🚀 FIXED: Special Note in Packed History Too */}
+          {(selectedPackedOrder.customer?.note || selectedPackedOrder.note) && (
+            <div className="mt-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3 rounded-xl shadow-sm">
+              <p className="text-xs font-black text-amber-800 dark:text-amber-400 flex items-center gap-1.5 mb-1">
+                ⚠️ Special Note (Packing Team)
+              </p>
+              <p className="text-[13px] sm:text-sm font-bold text-amber-900 dark:text-amber-300 leading-relaxed">
+                {selectedPackedOrder.customer?.note || selectedPackedOrder.note}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mb-2">
           <h3 className="text-[11px] sm:text-xs font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5 sm:mb-3">Packed Items ({selectedPackedOrder.items?.length})</h3>
           <div className="space-y-2.5 sm:space-y-3">
             {selectedPackedOrder.items?.map((item: any, idx: number) => (
-              <div key={idx} className="border border-slate-200 dark:border-white/10 rounded-xl p-2.5 sm:p-3 flex gap-3 sm:gap-4 bg-slate-50 dark:bg-[#141d1a] shadow-sm items-center transition-colors">
+              <div key={`history-item-${idx}`} className="border border-slate-200 dark:border-white/10 rounded-xl p-2.5 sm:p-3 flex gap-3 sm:gap-4 bg-slate-50 dark:bg-[#141d1a] shadow-sm items-center transition-colors">
                 <img 
                   src={getImageUrl(item.product?.imageUrl || item.product?.thumbnail)} 
                   className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-200 dark:border-white/10 shadow-sm cursor-zoom-in hover:opacity-80 transition-opacity shrink-0" 

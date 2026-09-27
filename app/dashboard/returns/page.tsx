@@ -36,12 +36,13 @@ export default function ReturnsPage() {
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders`, {
+      const res = await fetch(`${apiUrl}/orders?limit=5000`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
-        setOrders(data.filter((o: any) => !o.isDeleted));
+        const responseData = await res.json();
+        const dataArray = responseData.data || responseData;
+        setOrders(dataArray.filter((o: any) => !o.isDeleted));
       }
     } catch (error) {
       console.error("Failed to fetch returns data:", error);
@@ -78,28 +79,71 @@ export default function ReturnsPage() {
     alert("✅ Steadfast থেকে সফলভাবে রিটার্ন ও পার্সিয়াল স্ট্যাটাস সিঙ্ক করা হয়েছে!");
   };
 
-  const pendingList = orders.filter(o => {
-    const status = o.status?.toUpperCase() || "";
-    return !o.isRestocked && ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(status);
-  }).filter(o => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return o.orderNo?.toLowerCase().includes(q) || o.consignmentId?.toLowerCase().includes(q) || o.customer?.phone?.includes(q) || o.customer?.name?.toLowerCase().includes(q);
-  });
+  // 🚀 নতুন ডেট ফিল্টার লজিক যোগ করা হলো
+  const passesDateFilter = (order: any) => {
+    if (dateFilter === "All Time") return true;
+    
+    const orderDate = new Date(order.updatedAt || order.createdAt);
+    const today = new Date();
+    orderDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
 
-  const restockedList = orders.filter(o => o.isRestocked === true).filter(o => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return o.orderNo?.toLowerCase().includes(q) || o.consignmentId?.toLowerCase().includes(q) || o.customer?.phone?.includes(q) || o.customer?.name?.toLowerCase().includes(q);
-  });
-
-  useEffect(() => {
-    if (activeTab === "pending" && pendingList.length > 0 && !selectedPendingOrder) {
-      setSelectedPendingOrder(pendingList[0]);
-    } else if (activeTab === "restocked" && restockedList.length > 0 && !selectedRestockedOrder) {
-      setSelectedRestockedOrder(restockedList[0]);
+    if (dateFilter === "Today") {
+      return orderDate.getTime() === today.getTime();
     }
-  }, [activeTab, orders, searchQuery]);
+    if (dateFilter === "Yesterday") {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return orderDate.getTime() === yesterday.getTime();
+    }
+    if (dateFilter === "Last 7") {
+      const last7 = new Date(today);
+      last7.setDate(last7.getDate() - 7);
+      return orderDate.getTime() >= last7.getTime();
+    }
+    if (dateFilter === "Last 30") {
+      const last30 = new Date(today);
+      last30.setDate(last30.getDate() - 30);
+      return orderDate.getTime() >= last30.getTime();
+    }
+    return true;
+  };
+
+  // 🚀 পেন্ডিং লিস্টে ডেট ফিল্টার যুক্ত করা হলো
+  const pendingList = orders
+    .filter(o => {
+      const status = o.status?.toUpperCase() || "";
+      return !o.isRestocked && ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(status);
+    })
+    .filter(passesDateFilter)
+    .filter(o => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return o.orderNo?.toLowerCase().includes(q) || o.consignmentId?.toLowerCase().includes(q) || o.customer?.phone?.includes(q) || o.customer?.name?.toLowerCase().includes(q);
+    });
+
+  // 🚀 রিস্টক লিস্টে ডেট ফিল্টার যুক্ত করা হলো
+  const restockedList = orders
+    .filter(o => o.isRestocked === true)
+    .filter(passesDateFilter)
+    .filter(o => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return o.orderNo?.toLowerCase().includes(q) || o.consignmentId?.toLowerCase().includes(q) || o.customer?.phone?.includes(q) || o.customer?.name?.toLowerCase().includes(q);
+    });
+
+  // 🚀 সিলেকশন আপডেট লজিক (ফিল্টার চেঞ্জ করার সময় সেফটি)
+  useEffect(() => {
+    if (activeTab === "pending") {
+      const stillExists = pendingList.find(o => o.id === selectedPendingOrder?.id);
+      if (!stillExists && pendingList.length > 0) setSelectedPendingOrder(pendingList[0]);
+      if (pendingList.length === 0) setSelectedPendingOrder(null);
+    } else {
+      const stillExists = restockedList.find(o => o.id === selectedRestockedOrder?.id);
+      if (!stillExists && restockedList.length > 0) setSelectedRestockedOrder(restockedList[0]);
+      if (restockedList.length === 0) setSelectedRestockedOrder(null);
+    }
+  }, [activeTab, orders, searchQuery, dateFilter]); // 👈 dateFilter ডিপেন্ডেন্সি যোগ করা হলো
 
   useEffect(() => {
     if (selectedPendingOrder) {
@@ -221,7 +265,6 @@ export default function ReturnsPage() {
     <>
       <div className="bg-slate-50 dark:bg-[#141d1a] p-5 border-b border-gray-200 dark:border-white/10 text-center relative shrink-0">
         
-        {/* 🚀 ডান দিক থেকে বামে (left-4) আনা হলো এবং flex-col দেওয়া হলো যাতে ওভারল্যাপ না হয় */}
         <div className="absolute top-4 left-4 flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
           {activeTab === "pending" ? (
             <span className="text-[10px] font-bold px-2.5 py-1 bg-rose-50 dark:bg-rose-500/10 text-[#e11d48] dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 rounded-full flex items-center gap-1 uppercase shadow-sm">
@@ -244,7 +287,6 @@ export default function ReturnsPage() {
           )}
         </div>
 
-        {/* 🚀 ব্যাজগুলো বামে দেওয়ায় টাইটেলটা একটু নিচে নামানো হলো (mt-8) মোবাইলের জন্য */}
         <p className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-1 mt-10 sm:mt-4">Steadfast Parcel ID</p>
         <p className="text-2xl font-black text-blue-700 dark:text-blue-400 tracking-wider font-mono">
           {activeTab === "pending" ? (selectedPendingOrder?.consignmentId || selectedPendingOrder?.orderNo || `ORD-${selectedPendingOrder?.id}`) : (selectedRestockedOrder?.consignmentId || selectedRestockedOrder?.orderNo || `ORD-${selectedRestockedOrder?.id}`)}
@@ -327,7 +369,6 @@ export default function ReturnsPage() {
         </div>
       </div>
 
-      {/* 🚀 pl-14 দেওয়া হলো যাতে N লোগোটা বাটনগুলোর সাথে ওভারল্যাপ না করে */}
       <div className="p-4 pl-14 lg:pl-4 border-t border-gray-200 dark:border-white/10 bg-slate-50 dark:bg-[#141d1a] shrink-0 z-10 transition-colors">
         {activeTab === "pending" ? (
           <div className="flex flex-col gap-3">

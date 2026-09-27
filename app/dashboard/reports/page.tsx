@@ -19,12 +19,13 @@ export default function ReportsAnalyticsPage() {
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders`, {
+      const res = await fetch(`${apiUrl}/orders?limit=5000`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
-        setOrders(data.filter((o: any) => !o.isDeleted)); 
+        const responseData = await res.json();
+        const dataArray = responseData.data || responseData;
+        setOrders(dataArray.filter((o: any) => !o.isDeleted)); 
       }
     } catch (error) {
       console.error("Failed to fetch analytics data:", error);
@@ -40,9 +41,8 @@ export default function ReportsAnalyticsPage() {
   const getMappedStatus = (status: string) => {
     const s = status?.toUpperCase() || "";
     if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED'].includes(s)) return 'DELIVERED';
-    if (['RETURNED', 'RETURN ACCEPTED'].includes(s)) return 'RETURNED';
-    if (['CANCELLED'].includes(s)) return 'CANCELLED';
-    if (['SHIPPED', 'IN TRANSIT', 'COURIER_PENDING'].includes(s)) return 'IN_TRANSIT';
+    if (['RETURNED', 'RETURN ACCEPTED', 'CANCELLED'].includes(s)) return 'RETURNED_CANCELLED';
+    if (['SHIPPED', 'IN TRANSIT', 'COURIER_PENDING', 'IN_REVIEW'].includes(s)) return 'IN_TRANSIT';
     return 'OTHER';
   };
 
@@ -74,8 +74,7 @@ export default function ReportsAnalyticsPage() {
   
   let deliveredCount = 0;
   let inTransitCount = 0;
-  let returnedCount = 0;
-  let cancelledCount = 0;
+  let returnedCancelledCount = 0;
 
   const productMap: Record<string, { name: string, sales: number, revenue: number, image: string }> = {};
   const districtMap: Record<string, number> = {};
@@ -87,10 +86,9 @@ export default function ReportsAnalyticsPage() {
 
     if (status === 'DELIVERED') deliveredCount++;
     else if (status === 'IN_TRANSIT') inTransitCount++;
-    else if (status === 'RETURNED') returnedCount++;
-    else if (status === 'CANCELLED') cancelledCount++;
+    else if (status === 'RETURNED_CANCELLED') returnedCancelledCount++;
 
-    if (status !== 'RETURNED' && status !== 'CANCELLED') {
+    if (status !== 'RETURNED_CANCELLED') {
       totalRevenue += amount;
       const dateStr = new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
       revenueByDate[dateStr] = (revenueByDate[dateStr] || 0) + amount;
@@ -99,7 +97,7 @@ export default function ReportsAnalyticsPage() {
     const district = order.customer?.district || "Unknown";
     districtMap[district] = (districtMap[district] || 0) + amount;
 
-    if (order.items && Array.isArray(order.items) && status !== 'CANCELLED' && status !== 'RETURNED') {
+    if (order.items && Array.isArray(order.items) && status !== 'RETURNED_CANCELLED') {
       order.items.forEach((item: any) => {
         const pName = item.product?.name || "Unknown Product";
         const pId = item.productId || pName;
@@ -116,12 +114,13 @@ export default function ReportsAnalyticsPage() {
   });
 
   const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-  const returnRate = totalOrders > 0 ? ((returnedCount / totalOrders) * 100).toFixed(1) : "0.0";
+  const returnRate = totalOrders > 0 ? ((returnedCancelledCount / totalOrders) * 100).toFixed(1) : "0.0";
 
+  // 🚀 ডাইনামিক স্লাইসিং: Last 7 Days হলে -7, Last 30 Days হলে -30, অন্যথায় সব দেখাবে
   const salesData = Object.entries(revenueByDate)
     .map(([label, value]) => ({ label, value, originalDate: new Date(label + ` ${new Date().getFullYear()}`) }))
     .sort((a, b) => a.originalDate.getTime() - b.originalDate.getTime())
-    .slice(-7);
+    .slice(dateFilter === "Last 7 Days" ? -7 : (dateFilter === "Last 30 Days" ? -30 : -365));
 
   const maxChartValue = Math.max(...salesData.map(d => d.value), 1);
 
@@ -163,7 +162,6 @@ export default function ReportsAnalyticsPage() {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-          {/* Pill Date Filters - Scrollable on mobile */}
           <div className="flex items-center bg-white dark:bg-[#1a2421] p-1 rounded-full border border-gray-200 dark:border-white/10 shadow-sm overflow-x-auto w-full sm:w-auto max-w-full">
             {dateFilters.map((filter) => (
               <button
@@ -186,10 +184,8 @@ export default function ReportsAnalyticsPage() {
         </div>
       </div>
 
-      {/* ================= KPI CARDS (RESPONSIVE GRID) ================= */}
+      {/* ================= KPI CARDS ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
-        
-        {/* Total Revenue */}
         <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
           <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -200,7 +196,6 @@ export default function ReportsAnalyticsPage() {
           <h3 className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-white truncate">৳ {totalRevenue.toLocaleString('en-IN')}</h3>
         </div>
 
-        {/* Total Orders */}
         <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
           <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
@@ -211,7 +206,6 @@ export default function ReportsAnalyticsPage() {
           <h3 className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-white">{totalOrders}</h3>
         </div>
 
-        {/* Average Order Value (AOV) */}
         <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
           <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -222,17 +216,15 @@ export default function ReportsAnalyticsPage() {
           <h3 className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-white truncate">৳ {avgOrderValue.toLocaleString('en-IN')}</h3>
         </div>
 
-        {/* Return Rate */}
         <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
           <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
               <Package size={18} />
             </div>
           </div>
-          <p className="text-[10px] sm:text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Return Rate</p>
+          <p className="text-[10px] sm:text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Return & Cancel Rate</p>
           <h3 className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-white">{returnRate}%</h3>
         </div>
-
       </div>
 
       {/* ================= CHARTS ROW ================= */}
@@ -248,19 +240,20 @@ export default function ReportsAnalyticsPage() {
             <h3 className="text-xl sm:text-2xl font-extrabold text-[#3b82f6] dark:text-blue-400">৳ {totalRevenue > 1000000 ? (totalRevenue / 1000000).toFixed(2) + 'M' : totalRevenue.toLocaleString('en-IN')}</h3>
           </div>
           
-          {/* CSS Bar Chart */}
-          <div className="flex-1 flex items-end gap-2 sm:gap-6 h-52 sm:h-56 mt-auto border-b border-gray-100 dark:border-white/5 pb-2 overflow-x-auto">
+          {/* CSS Bar Chart with Fixed Tooltip Position */}
+          <div className="flex-1 flex items-end gap-2 sm:gap-6 h-52 sm:h-56 mt-auto border-b border-gray-100 dark:border-white/5 pb-2 overflow-x-auto pt-10">
             {salesData.length === 0 ? (
               <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Revenue Data for this period.</div>
             ) : (
               salesData.map((data, idx) => {
                 const heightPercentage = Math.max((data.value / maxChartValue) * 100, 5); 
                 return (
-                  <div key={idx} className="flex flex-col items-center flex-1 gap-2 group min-w-[32px]">
-                    <div className="w-full flex items-end justify-center h-44 sm:h-48 relative">
-                       <div className="absolute -top-8 bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          ৳ {data.value.toLocaleString('en-IN')}
-                       </div>
+                  <div key={idx} className="flex flex-col items-center flex-1 gap-2 group min-w-[32px] relative">
+                    {/* 🚀 টুলটিপ বারের অনেক উপরে ফিক্সড করা হলো যাতে কেটে না যায় */}
+                    <div className="absolute -top-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
+                      ৳ {data.value.toLocaleString('en-IN')}
+                    </div>
+                    <div className="w-full flex items-end justify-center h-40 sm:h-44 relative">
                        <div 
                          className="w-full max-w-[36px] bg-blue-100 dark:bg-blue-500/20 group-hover:bg-[#3b82f6] dark:group-hover:bg-blue-500 rounded-t-md transition-all duration-500 ease-out cursor-pointer"
                          style={{ height: `${heightPercentage}%` }}
@@ -365,7 +358,7 @@ export default function ReportsAnalyticsPage() {
         <div className="bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm p-4 sm:p-6 transition-colors">
           <h2 className="text-[15px] sm:text-[16px] font-bold text-slate-800 dark:text-white mb-5">Order Status Breakdown</h2>
           
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-center items-center text-center transition-colors">
               <p className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Delivered</p>
               <h3 className="text-xl sm:text-2xl font-extrabold text-blue-700 dark:text-blue-300">{calculatePercent(deliveredCount)}%</h3>
@@ -377,14 +370,9 @@ export default function ReportsAnalyticsPage() {
               <p className="text-[10px] text-gray-500 mt-1">{inTransitCount} Orders</p>
             </div>
             <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 rounded-xl p-3 sm:p-4 flex flex-col justify-center items-center text-center transition-colors">
-              <p className="text-[10px] sm:text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">Returned</p>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300">{calculatePercent(returnedCount)}%</h3>
-              <p className="text-[10px] text-gray-500 mt-1">{returnedCount} Orders</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3 sm:p-4 flex flex-col justify-center items-center text-center transition-colors">
-              <p className="text-[10px] sm:text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1">Cancelled</p>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-slate-700 dark:text-white">{calculatePercent(cancelledCount)}%</h3>
-              <p className="text-[10px] text-gray-500 mt-1">{cancelledCount} Orders</p>
+              <p className="text-[10px] sm:text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">Returned & Cancelled</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300">{calculatePercent(returnedCancelledCount)}%</h3>
+              <p className="text-[10px] text-gray-500 mt-1">{returnedCancelledCount} Orders</p>
             </div>
           </div>
         </div>

@@ -51,15 +51,20 @@ export default function StaffPayrollPage() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
+      // 🚀 FIX: Added limit=5000 to fetch all orders for staff calculation
       const [usersRes, ordersRes, payrollRes] = await Promise.all([
-        fetch(`${apiUrl}/users`, { headers }),
-        fetch(`${apiUrl}/orders`, { headers }),
+        fetch(`${apiUrl}/users?limit=5000`, { headers }),
+        fetch(`${apiUrl}/orders?limit=5000`, { headers }),
         fetch(`${apiUrl}/users/payroll/history`, { headers }) 
       ]);
       
       if (usersRes.ok && ordersRes.ok && payrollRes.ok) {
-        setRawUsers(await usersRes.json());
-        setRawOrders(await ordersRes.json());
+        const usersDataRaw = await usersRes.json();
+        const ordersDataRaw = await ordersRes.json();
+
+        // 🚀 FIX: Extract data arrays safely from paginated structure
+        setRawUsers(usersDataRaw.data || usersDataRaw);
+        setRawOrders(ordersDataRaw.data || ordersDataRaw);
         setPayrollHistory(await payrollRes.json());
       }
     } catch (error) {

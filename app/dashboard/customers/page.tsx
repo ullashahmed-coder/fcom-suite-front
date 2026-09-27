@@ -26,29 +26,64 @@ export default function CustomersPage() {
   const [smsModal, setSmsModal] = useState<{isOpen: boolean, type: 'SMS' | 'OFFER', isBulk: boolean}>({ isOpen: false, type: 'SMS', isBulk: false });
   const [smsText, setSmsText] = useState("");
 
+  // 🚀 New States for Pagination
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [totalDBCustomers, setTotalDBCustomers] = useState(0);
+
+  const [customerFilterType, setCustomerFilterType] = useState<"ALL" | "REPEAT" | "ACTIVE">("ALL");
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-  const fetchCustomers = async () => {
+  // 🚀 Updated Fetch Function for Pagination and Server-Side Search
+  // 🚀 ফেচ ফাংশনে ফিল্টার প্যারামিটার যুক্ত করা
+  const fetchCustomers = async (pageNum = 1, search = searchQuery, filterType = customerFilterType) => {
+    if (pageNum === 1) setIsLoading(true);
+    else setIsFetchingMore(true);
+
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/customers`, {
+      const res = await fetch(`${apiUrl}/customers?page=${pageNum}&limit=50&search=${encodeURIComponent(search)}&filter=${filterType}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
-        setCustomers(data);
+        const result = await res.json();
+        const fetchedData = result.data || [];
+        
+        if (pageNum === 1) {
+          setCustomers(fetchedData);
+        } else {
+          setCustomers(prev => [...prev, ...fetchedData]);
+        }
+        
+        if (result.meta) {
+          setHasMore(result.meta.page < result.meta.totalPages);
+          setTotalDBCustomers(result.meta.total);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch customers:", error);
     } finally {
       setIsLoading(false);
+      setIsFetchingMore(false);
     }
   };
 
   useEffect(() => {
     setMounted(true);
-    fetchCustomers();
   }, []);
+
+  // 🚀 Debounced Search Effect
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      setPage(1);
+      fetchCustomers(1, searchQuery, customerFilterType);
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, customerFilterType]);
+
 
   const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +115,8 @@ export default function CustomersPage() {
             setSelectedCustomer(null);
         }
         setCustomerForm({ id: "", name: "", phone: "", district: "", address: "" });
-        fetchCustomers();
+        setPage(1);
+        fetchCustomers(1, searchQuery, customerFilterType);
       } else {
         alert("❌ কাস্টমার সেভ করা যায়নি।");
       }
@@ -105,7 +141,8 @@ export default function CustomersPage() {
       if (res.ok) {
         alert("✅ কাস্টমার ডিলিট করা হয়েছে।");
         setSelectedCustomer(null);
-        fetchCustomers();
+        setPage(1);
+        fetchCustomers(1, searchQuery, customerFilterType);
       } else {
         const errorData = await res.json();
         alert(`❌ ডিলিট এরর: ${errorData.message || "এই কাস্টমারকে ডিলিট করা যাচ্ছে না!"}`);
@@ -134,8 +171,13 @@ export default function CustomersPage() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
+      // Search is handled by server, but keeping fallback logic for UI fluidity
       const matchesSearch = customer.name?.toLowerCase().includes(searchQuery.toLowerCase()) || customer.phone?.includes(searchQuery);
       if (!matchesSearch) return false;
+
+      const orderCount = customer.orders?.length || customer.totalOrders || 0;
+      if (customerFilterType === "REPEAT" && orderCount <= 1) return false;
+      if (customerFilterType === "ACTIVE" && orderCount === 0) return false;
 
       if (activeDateFilter === "All time") return true;
 
@@ -158,7 +200,7 @@ export default function CustomersPage() {
       
       return true;
     });
-  }, [customers, searchQuery, activeDateFilter]);
+  }, [customers, searchQuery, activeDateFilter, customerFilterType]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
@@ -201,7 +243,8 @@ export default function CustomersPage() {
 
   const insertVariable = (variable: string) => setSmsText(prev => prev + variable);
 
-  const totalCustomersCount = customers.length;
+  // Stats calculation (Note: Lifetime & Repeat are based on loaded customers)
+  const totalCustomersCount = totalDBCustomers || customers.length;
   const repeatCustomersCount = customers.filter(c => (c.orders?.length || c.totalOrders || 0) > 1).length;
   
   const totalLifetimeSpent = customers.reduce((sum, c) => {
@@ -228,10 +271,18 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      {/* ================= STATS CARDS (Responsive Grid) ================= */}
+      {/* ================= STATS CARDS (Clickable) ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         
-        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+        {/* Total Customer Card */}
+        <div 
+          onClick={() => {
+            setCustomerFilterType("ALL");
+            setPage(1);
+            fetchCustomers(1, searchQuery, "ALL");
+          }}
+          className={`bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all ${customerFilterType === "ALL" ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-gray-200 dark:border-white/5 hover:border-gray-300"}`}
+        >
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Total Customer</p>
@@ -243,7 +294,15 @@ export default function CustomersPage() {
           </div>
         </div>
         
-        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+        {/* Repeat Customer Card */}
+        <div 
+          onClick={() => {
+            setCustomerFilterType("REPEAT");
+            setPage(1);
+            fetchCustomers(1, searchQuery, "REPEAT");
+          }}
+          className={`bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all ${customerFilterType === "REPEAT" ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-gray-200 dark:border-white/5 hover:border-gray-300"}`}
+        >
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Repeat Customer</p>
@@ -258,12 +317,20 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors">
+        {/* Active Database Card */}
+        <div 
+          onClick={() => {
+            setCustomerFilterType("ACTIVE");
+            setPage(1);
+            fetchCustomers(1, searchQuery, "ACTIVE");
+          }}
+          className={`bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all ${customerFilterType === "ACTIVE" ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-gray-200 dark:border-white/5 hover:border-gray-300"}`}
+        >
           <div className="flex justify-between items-start">
             <div>
               <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2">Active Database</p>
               <h3 className="text-xl sm:text-3xl font-black text-slate-800 dark:text-white">{customers.length}</h3>
-              <p className="text-[10px] sm:text-xs font-bold text-emerald-500 mt-1.5 sm:mt-2">Verified records</p>
+              <p className="text-[10px] sm:text-xs font-bold text-emerald-500 mt-1.5 sm:mt-2">Loaded records</p>
             </div>
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-500">
               <UserPlus size={16} className="sm:w-[20px] sm:h-[20px]" />
@@ -271,6 +338,7 @@ export default function CustomersPage() {
           </div>
         </div>
 
+        {/* Lifetime Sells Card (Normal view) */}
         <div className="bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none transition-colors relative overflow-hidden">
           <div className="flex justify-between items-start relative z-10">
             <div>
@@ -289,7 +357,6 @@ export default function CustomersPage() {
 
       {/* ================= TOOLBAR & FILTERS ================= */}
       <div className="bg-white dark:bg-[#1a2421] p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 transition-colors shadow-sm">
-        
         <div className="relative w-full xl:w-[350px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input 
@@ -300,7 +367,6 @@ export default function CustomersPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full xl:w-auto overflow-hidden">
-          {/* Scrollable Date Filters */}
           <div className="flex items-center bg-slate-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-transparent shrink-0 w-full sm:w-auto overflow-x-auto custom-scrollbar">
             {["Today", "Yesterday", "Last 7", "Last 30", "Inactive 90+ Days", "All time"].map(filter => (
               <button 
@@ -328,7 +394,7 @@ export default function CustomersPage() {
             onChange={handleSelectAll}
           />
           <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-gray-200">
-            Select All {selectedCustomerIds.length > 0 ? `(${selectedCustomerIds.length})` : ""}
+            Select All Loaded {selectedCustomerIds.length > 0 ? `(${selectedCustomerIds.length})` : ""}
           </span>
         </div>
 
@@ -351,7 +417,7 @@ export default function CustomersPage() {
       </div>
 
       {/* ================= CUSTOMERS GRID ================= */}
-      {isLoading ? (
+      {isLoading && page === 1 ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="animate-spin text-emerald-600" size={40} />
         </div>
@@ -361,62 +427,85 @@ export default function CustomersPage() {
           <h3 className="text-[15px] sm:text-lg font-bold text-slate-700 dark:text-gray-300">কোনো কাস্টমার পাওয়া যায়নি!</h3>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-          {filteredCustomers.map((customer) => {
-            const customerOrderCount = customer.orders?.length || customer.totalOrders || 0;
-            const isRepeat = customerOrderCount > 1;
-            const customerLifetimeSpent = customer.lifetimeSpent || (customer.orders ? customer.orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0) : 0);
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+            {filteredCustomers.map((customer) => {
+              const customerOrderCount = customer.orders?.length || customer.totalOrders || 0;
+              const isRepeat = customerOrderCount > 1;
+              const customerLifetimeSpent = customer.lifetimeSpent || (customer.orders ? customer.orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0) : 0);
 
-            return (
-              <div key={customer.id} className={`bg-white dark:bg-[#1a2421] rounded-2xl border flex flex-col hover:shadow-lg dark:hover:border-white/10 transition-all overflow-hidden relative group ${selectedCustomerIds.includes(customer.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
-                
-                <div className="absolute top-4 left-4 z-10">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
-                    checked={selectedCustomerIds.includes(customer.id)}
-                    onChange={() => handleSelectOne(customer.id)}
-                  />
-                </div>
-
-                <div className="absolute top-4 right-4">
-                  <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-wider ${isRepeat ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10'}`}>
-                    {isRepeat ? 'REPEAT' : 'NEW'}
-                  </span>
-                </div>
-
-                <div className="p-5 sm:p-6 pt-10 flex flex-col items-center text-center border-b border-gray-50 dark:border-white/5">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-xl font-black text-slate-400 mb-2.5 sm:mb-3 border border-slate-200 dark:border-white/10">
-                    {customer.name ? customer.name.substring(0, 1).toUpperCase() : "C"}
+              return (
+                <div key={customer.id} className={`bg-white dark:bg-[#1a2421] rounded-2xl border flex flex-col hover:shadow-lg dark:hover:border-white/10 transition-all overflow-hidden relative group ${selectedCustomerIds.includes(customer.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
+                  
+                  <div className="absolute top-4 left-4 z-10">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
+                      checked={selectedCustomerIds.includes(customer.id)}
+                      onChange={() => handleSelectOne(customer.id)}
+                    />
                   </div>
-                  <h3 className="text-[15px] sm:text-[17px] font-bold text-slate-800 dark:text-white line-clamp-1">{customer.name}</h3>
-                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1"><Phone size={12}/> {customer.phone}</p>
-                </div>
 
-                <div className="p-3.5 sm:p-4 grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50/50 dark:bg-white/5">
-                  <div>
-                    <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</p>
-                    <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1 mt-1"><ShoppingBag size={12} className="text-slate-400"/> {customerOrderCount}</p>
+                  <div className="absolute top-4 right-4">
+                    <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-wider ${isRepeat ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10'}`}>
+                      {isRepeat ? 'REPEAT' : 'NEW'}
+                    </span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lifetime Spent</p>
-                    <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1">৳ {customerLifetimeSpent.toLocaleString()}</p>
-                  </div>
-                </div>
 
-                <div className="p-3 sm:p-4 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-transparent">
-                  <span className="text-[9px] sm:text-[10px] font-medium text-gray-400">Joined: {formatDate(customer.createdAt)}</span>
-                  <button onClick={() => setSelectedCustomer(customer)} className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-rose-400 hover:text-emerald-800 flex items-center gap-1 transition-colors">
-                    <Eye size={14}/> View Profile
-                  </button>
+                  <div className="p-5 sm:p-6 pt-10 flex flex-col items-center text-center border-b border-gray-50 dark:border-white/5">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-xl font-black text-slate-400 mb-2.5 sm:mb-3 border border-slate-200 dark:border-white/10">
+                      {customer.name ? customer.name.substring(0, 1).toUpperCase() : "C"}
+                    </div>
+                    <h3 className="text-[15px] sm:text-[17px] font-bold text-slate-800 dark:text-white line-clamp-1">{customer.name}</h3>
+                    <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1"><Phone size={12}/> {customer.phone}</p>
+                  </div>
+
+                  <div className="p-3.5 sm:p-4 grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50/50 dark:bg-white/5">
+                    <div>
+                      <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</p>
+                      <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1 mt-1"><ShoppingBag size={12} className="text-slate-400"/> {customerOrderCount}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lifetime Spent</p>
+                      <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1">৳ {customerLifetimeSpent.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 sm:p-4 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-transparent">
+                    <span className="text-[9px] sm:text-[10px] font-medium text-gray-400">Joined: {formatDate(customer.createdAt)}</span>
+                    <button onClick={() => setSelectedCustomer(customer)} className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-rose-400 hover:text-emerald-800 flex items-center gap-1 transition-colors">
+                      <Eye size={14}/> View Profile
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* 🚀 LOAD MORE BUTTON */}
+          {hasMore && (
+            <div className="flex justify-center mt-8 pb-4">
+              <button
+                onClick={() => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  fetchCustomers(nextPage, searchQuery);
+                }}
+                disabled={isFetchingMore}
+                className="bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-6 py-2.5 rounded-full font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                {isFetchingMore ? (
+                  <><Loader2 size={16} className="animate-spin" /> Loading...</>
+                ) : (
+                  "Load More Customers"
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ================= CUSTOMER PROFILE DRAWER (PORTAL) ================= */}
+      {/* ================= CUSTOMER PROFILE DRAWER ================= */}
       {selectedCustomer && mounted && createPortal(
         <>
           <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/60 backdrop-blur-sm z-[99998] transition-opacity" onClick={() => setSelectedCustomer(null)} />
@@ -469,7 +558,6 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              {/* 🚀 PURCHASE HISTORY SECTION (WITH IMAGES) */}
               <div>
                 <h3 className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 sm:mb-3 flex justify-between items-end">
                   <span>Purchase History</span>
@@ -538,7 +626,7 @@ export default function CustomersPage() {
 
             </div>
 
-            {/* 🚀 Drawer Footer: Sticky bottom on Mobile */}
+            {/* Drawer Footer */}
             <div className="absolute sm:relative bottom-0 left-0 right-0 p-4 sm:p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid grid-cols-2 gap-2 sm:gap-3 transition-colors shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] sm:shadow-none z-20">
                <button 
                  onClick={() => openEditModal(selectedCustomer)} 
@@ -559,7 +647,7 @@ export default function CustomersPage() {
         document.body
       )}
 
-      {/* ================= SMS & OFFER MODAL (PORTAL) ================= */}
+      {/* ================= SMS MODAL ================= */}
       {smsModal.isOpen && mounted && createPortal(
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -617,7 +705,7 @@ export default function CustomersPage() {
         document.body
       )}
 
-      {/* ================= ADD/EDIT CUSTOMER MODAL (PORTAL) ================= */}
+      {/* ================= ADD/EDIT CUSTOMER MODAL ================= */}
       {isCustomerModalOpen && mounted && createPortal(
         <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1a2421] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">

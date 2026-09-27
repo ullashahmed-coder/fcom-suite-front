@@ -35,14 +35,18 @@ export default function CourierPage() {
     setIsSyncing(true);
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders`, {
+      // 🚀 FIX: Added limit=1000 to fetch recent courier parcels without breaking
+      const res = await fetch(`${apiUrl}/orders?limit=1000`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
+        const responseData = await res.json();
+        
+        // 🚀 FIX: Handle paginated response structure
+        const dataArray = responseData.data || responseData;
         
         const courierStatuses = ['PACKED', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'RETURNED', 'IN_REVIEW', 'DELIVERED_APPROVAL_PENDING'];
-        const dispatched = data.filter((o: any) => !o.isDeleted && o.consignmentId && courierStatuses.includes(o.status?.toUpperCase()));
+        const dispatched = dataArray.filter((o: any) => !o.isDeleted && o.consignmentId && courierStatuses.includes(o.status?.toUpperCase()));
         
         setOrders(dispatched);
 

@@ -16,7 +16,7 @@ export default function OrdersPage() {
 
   const [isBulkBooking, setIsBulkBooking] = useState(false);
 
-  const [activeTab, setActiveTab] = useState("All orders");
+  const [activeTab, setActiveTab] = useState("New orders");
   const [timeFilter, setTimeFilter] = useState("ALL"); 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
@@ -24,29 +24,67 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
+  // 🚀 New States for Pagination (Load More)
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [totalOrdersCount, setTotalOrdersCount] = useState(0); // Optional: to show total in 'All orders' tab
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-  const fetchOrders = async () => {
+  // 🚀 Updated Fetch Function for Pagination and Server-Side Search
+  const fetchOrders = async (pageNum = 1, search = searchQuery) => {
+    if (pageNum === 1) setIsLoading(true);
+    else setIsFetchingMore(true);
+
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders`, {
+      const res = await fetch(`${apiUrl}/orders?page=${pageNum}&limit=50&search=${encodeURIComponent(search)}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
+      
       if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
+        const result = await res.json();
+        // Since backend now returns { data, meta }
+        const fetchedOrders = result.data || [];
+        
+        if (pageNum === 1) {
+          setOrders(fetchedOrders);
+        } else {
+          setOrders(prev => [...prev, ...fetchedOrders]);
+        }
+        
+        // Handle pagination logic
+        if (result.meta) {
+          setHasMore(result.meta.page < result.meta.totalPages);
+          setTotalOrdersCount(result.meta.total);
+        } else {
+          setHasMore(fetchedOrders.length === 50);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
     } finally {
       setIsLoading(false);
+      setIsFetchingMore(false);
     }
   };
 
   useEffect(() => {
     setMounted(true);
-    fetchOrders();
   }, []);
+
+  // 🚀 Debounced Search Effect
+  useEffect(() => {
+    // 500ms delay after user stops typing to trigger backend search
+    const delayDebounceFn = setTimeout(() => {
+      setPage(1);
+      fetchOrders(1, searchQuery);
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]); // Runs whenever searchQuery changes
+
 
   const handleDeleteOrder = async (id: string) => {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি ট্র্যাশে পাঠাতে চান? স্টক ইনভেন্টরিতে ফিরিয়ে দেওয়া হবে।")) return;
@@ -61,7 +99,8 @@ export default function OrdersPage() {
       if (res.ok) {
         alert("✅ অর্ডারটি ট্র্যাশে পাঠানো হয়েছে।");
         setSelectedOrder(null);
-        fetchOrders(); 
+        setPage(1);
+        fetchOrders(1, searchQuery); 
       } else {
         alert("❌ অর্ডার ট্র্যাশে পাঠানো সম্ভব হয়নি।");
       }
@@ -83,7 +122,8 @@ export default function OrdersPage() {
       if (res.ok) {
         alert("✅ অর্ডারটি রিস্টোর করা হয়েছে!");
         setSelectedOrder(null);
-        fetchOrders(); 
+        setPage(1);
+        fetchOrders(1, searchQuery); 
       } else {
         alert("❌ রিস্টোর করা সম্ভব হয়নি।");
       }
@@ -104,7 +144,8 @@ export default function OrdersPage() {
       if (res.ok) {
         alert("✅ অর্ডারটি স্থায়ীভাবে ডিলিট করা হয়েছে!");
         setSelectedOrder(null);
-        fetchOrders(); 
+        setPage(1);
+        fetchOrders(1, searchQuery); 
       } else {
         alert("❌ ডিলিট করা সম্ভব হয়নি।");
       }
@@ -128,7 +169,8 @@ export default function OrdersPage() {
       
       if (res.ok) {
         alert(`✅ সফলভাবে বুকিং হয়েছে! Consignment ID: ${data.consignment?.consignment_id || data.consignment?.tracking_code}`);
-        fetchOrders(); 
+        setPage(1);
+        fetchOrders(1, searchQuery); 
         if (selectedOrder && selectedOrder.id === orderId) {
           setSelectedOrder(null); 
         }
@@ -185,7 +227,8 @@ export default function OrdersPage() {
 
       alert(`✅ বুল্ক বুকিং সম্পন্ন!\nসফল হয়েছে: ${successCount} টি\nব্যর্থ হয়েছে: ${failCount} টি`);
       setSelectedOrderIds([]); 
-      fetchOrders(); 
+      setPage(1);
+      fetchOrders(1, searchQuery); 
     } catch (error) {
       console.error("Bulk booking error:", error);
       alert("সার্ভার এরর! বুল্ক বুকিং সম্পন্ন করা যায়নি।");
@@ -211,7 +254,8 @@ export default function OrdersPage() {
       if (res.ok) {
         alert("✅ অর্ডারটি সফলভাবে Delivered মার্ক করা হয়েছে!");
         setSelectedOrder(null);
-        fetchOrders(); 
+        setPage(1);
+        fetchOrders(1, searchQuery); 
       } else {
         const errorData = await res.json();
         console.error("Backend Error:", errorData);
@@ -226,9 +270,9 @@ export default function OrdersPage() {
   const returnStatuses = ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'];
   const visibleOrders = orders.filter(o => !o.isDeleted);
 
-  // 🚀 ফিক্সড: DELIVERED_APPROVAL_PENDING এখন Delivered ট্যাবে কাউন্ট হবে
+  // 🚀 Note: Tab counts now represent the currently LOADED orders, except "All orders" which uses DB total
   const tabConfigs = [
-    { label: "All orders", status: "All orders", count: visibleOrders.length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
+    { label: "All orders", status: "All orders", count: totalOrdersCount || visibleOrders.length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
     { label: "New orders", status: "PENDING", count: visibleOrders.filter(o => o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
     { label: "Review", status: "IN_REVIEW", count: visibleOrders.filter(o => o.status === 'IN_REVIEW').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
     { label: "Packed", status: "PACKED", count: visibleOrders.filter(o => o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
@@ -253,15 +297,14 @@ export default function OrdersPage() {
     } else if (activeTab === "Cancel") {
       matchesTab = returnStatuses.includes(statusUpper) && order.isRestocked;
     } else if (activeTab === "Pending") {
-      // 🚀 DELIVERED_APPROVAL_PENDING এখানে থেকে বাদ দেওয়া হলো
       matchesTab = statusUpper === "COURIER_PENDING" || statusUpper === "SHIPPED" || statusUpper === "IN_TRANSIT" || (returnStatuses.includes(statusUpper) && !order.isRestocked);
     } else if (activeTab === "Delivered") {
-      // 🚀 Delivered ট্যাবে সাধারণ Delivered এবং Approval Pending দুটোই দেখাবে
       matchesTab = statusUpper === "DELIVERED" || statusUpper === "DELIVERED_APPROVAL_PENDING";
     } else {
       matchesTab = statusUpper === tabConfigs.find(t => t.label === activeTab)?.status;
     }
 
+    // Server-side handles text search now, but we keep this as fallback for client-side tabs
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
       order.orderNo.toLowerCase().includes(searchLower) ||
@@ -354,7 +397,7 @@ export default function OrdersPage() {
                 onClick={() => setActiveTab(tab.label)}
                 className={`min-w-[140px] p-4 flex flex-col justify-between rounded-xl border transition-all text-left ${
                   isActive 
-                    ? `${tab.bgClass} ${tab.borderClass} shadow-sm ring-1 ring-inset ${tab.ringClass}` 
+                    ? `${tab.bgClass} ${tab.borderClass} shadow-sm ring-1 ring-inset${tab.ringClass}` 
                     : "bg-white dark:bg-[#1a2421] border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10"
                 }`}
               >
@@ -362,7 +405,7 @@ export default function OrdersPage() {
                   {tab.label}
                 </span>
                 <span className={`text-2xl font-bold mt-2 ${isActive ? tab.colorClass : "text-slate-800 dark:text-gray-200"}`}>
-                  {isLoading ? "-" : tab.count}
+                  {isLoading && page === 1 ? "-" : tab.count}
                 </span>
               </button>
             );
@@ -415,7 +458,7 @@ export default function OrdersPage() {
               onChange={handleSelectAll}
             />
             <span className="text-sm font-bold text-slate-700 dark:text-gray-200">
-              Select All {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : ""}
+              Select All Loaded {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : ""}
             </span>
           </div>
 
@@ -437,152 +480,174 @@ export default function OrdersPage() {
         </div>
 
         {/* ================= ORDER CARDS GRID ================= */}
-        {isLoading ? (
+        {isLoading && page === 1 ? (
            <div className="flex justify-center items-center py-20">
              <Loader2 className="animate-spin text-emerald-600" size={40} />
            </div>
         ) : filteredOrders.length === 0 ? (
            <div className="text-center py-16 text-slate-500 dark:text-gray-400">
-             No orders found for the selected filter.
+             No orders found for the selected filter or search.
            </div>
         ) : (
-          <div className={`grid gap-5 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"}`}>
-            {filteredOrders.map((order) => {
-              const orderItemsCount = order.items?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
-              const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
-              
-              let imageRender;
-              const imageSource = getProductImageClassOrUrl(firstItem, true);
-              
-              if (imageSource && imageSource.startsWith('http')) {
-                 imageRender = <img src={imageSource} alt="Thumbnail" className="w-full h-full object-cover" />;
-              } else {
-                 imageRender = <div className={`w-full h-full ${imageSource || 'bg-gray-200 dark:bg-gray-700'}`}></div>;
-              }
+          <div className="space-y-6">
+            <div className={`grid gap-5 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"}`}>
+              {filteredOrders.map((order) => {
+                const orderItemsCount = order.items?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
+                const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+                
+                let imageRender;
+                const imageSource = getProductImageClassOrUrl(firstItem, true);
+                
+                if (imageSource && imageSource.startsWith('http')) {
+                   imageRender = <img src={imageSource} alt="Thumbnail" className="w-full h-full object-cover" />;
+                } else {
+                   imageRender = <div className={`w-full h-full ${imageSource || 'bg-gray-200 dark:bg-gray-700'}`}></div>;
+                }
 
-              const dueAmount = Math.max(0, order.totalAmount - (order.advance || 0));
-              const isAlreadyBooked = !!order.consignmentId || order.status === 'IN_REVIEW';
-              const isModifiable = ['PENDING', 'IN_REVIEW'].includes(order.status?.toUpperCase());
+                const dueAmount = Math.max(0, order.totalAmount - (order.advance || 0));
+                const isAlreadyBooked = !!order.consignmentId || order.status === 'IN_REVIEW';
+                const isModifiable = ['PENDING', 'IN_REVIEW'].includes(order.status?.toUpperCase());
 
-              return (
-                <div key={order.id} className={`bg-white dark:bg-[#1a2421] rounded-xl border flex flex-col hover:shadow-md dark:hover:shadow-none dark:hover:border-white/10 transition-all ${order.isDeleted ? 'opacity-75 grayscale-[20%]' : ''} ${selectedOrderIds.includes(order.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
-                  
-                  {/* Card Header */}
-                  <div className="p-4 border-b border-gray-50 dark:border-white/5">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-start gap-3">
-                        <input 
-                          type="checkbox" 
-                          className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
-                          checked={selectedOrderIds.includes(order.id)}
-                          onChange={() => handleSelectOrder(order.id)}
-                          disabled={isAlreadyBooked} 
-                          title={isAlreadyBooked ? "Already Booked" : "Select Order"}
-                        />
-                        <div>
-                          <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">{order.orderNo}</h3>
-                          
-                          {order.consignmentId && (
-                            <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
-                              <Box size={10} /> CN: {order.consignmentId}
+                return (
+                  <div key={order.id} className={`bg-white dark:bg-[#1a2421] rounded-xl border flex flex-col hover:shadow-md dark:hover:shadow-none dark:hover:border-white/10 transition-all ${order.isDeleted ? 'opacity-75 grayscale-[20%]' : ''} ${selectedOrderIds.includes(order.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
+                    
+                    {/* Card Header */}
+                    <div className="p-4 border-b border-gray-50 dark:border-white/5">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-start gap-3">
+                          <input 
+                            type="checkbox" 
+                            className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
+                            checked={selectedOrderIds.includes(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                            disabled={isAlreadyBooked} 
+                            title={isAlreadyBooked ? "Already Booked" : "Select Order"}
+                          />
+                          <div>
+                            <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">{order.orderNo}</h3>
+                            
+                            {order.consignmentId && (
+                              <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
+                                <Box size={10} /> CN: {order.consignmentId}
+                              </p>
+                            )}
+
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase mt-0.5">{formatDate(order.createdAt)}</p>
+                            
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
+                              <User size={10}/> Entry by: <span className="font-bold text-slate-600 dark:text-gray-300">{order.user?.name || "Admin"}</span>
                             </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
+                            {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : order.status === 'SHIPPED' || order.status === 'IN_TRANSIT' ? 'PENDING' : order.status}
+                          </span>
+                          {order.isRestocked && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10" title="This order has been restocked to inventory">
+                              <CheckCircle2 size={10} /> RESTOCKED
+                            </span>
                           )}
-
-                          <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase mt-0.5">{formatDate(order.createdAt)}</p>
-                          
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
-                            <User size={10}/> Entry by: <span className="font-bold text-slate-600 dark:text-gray-300">{order.user?.name || "Admin"}</span>
-                          </p>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-4 flex justify-between items-start">
+                      <div>
+                        <h4 className="text-[14px] font-bold text-slate-800 dark:text-gray-100">{order.customer?.name}</h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{order.customer?.phone}</p>
+                      </div>
                       
-                      <div className="flex flex-col items-end gap-1.5">
-                        {/* 🚀 ফিক্সড: DELIVERED_APPROVAL_PENDING কে ছোট করে সুন্দর ব্যাজ করা হলো */}
-                        <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
-                          {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : order.status === 'SHIPPED' || order.status === 'IN_TRANSIT' ? 'PENDING' : order.status}
+                      <div className="text-right flex flex-col items-end gap-1.5">
+                        <span className="text-[12px] font-bold text-slate-400 dark:text-gray-500">
+                          Total: ৳ {order.totalAmount}
                         </span>
-                        {order.isRestocked && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10" title="This order has been restocked to inventory">
-                            <CheckCircle2 size={10} /> RESTOCKED
-                          </span>
+                        <span className="text-[14px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-500/20 shadow-sm">
+                          COD: ৳ {dueAmount}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Product Thumbnail Row */}
+                    <div className="mx-4 mb-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-lg p-2 flex justify-between items-center transition-colors">
+                      <div className="w-8 h-8 rounded shadow-sm border border-black/10 dark:border-white/10 overflow-hidden">
+                         {imageRender}
+                      </div>
+                      <span className="text-[11px] text-slate-500 dark:text-gray-400 font-medium">{orderItemsCount} Items</span>
+                    </div>
+
+                    {/* Card Footer */}
+                    <div className="p-4 pt-2 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center">
+                      <button 
+                        onClick={() => setSelectedOrder(order)}
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-gray-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                      >
+                        <Eye size={14} /> View Details
+                      </button>
+                      <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
+                        {!order.isDeleted ? (
+                          <>
+                            {isModifiable && (
+                              <>
+                                <Link href={`/dashboard/orders/${order.id}/edit`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Edit Order">
+                                  <Edit3 size={15} />
+                                </Link>
+                                <button onClick={() => handleDeleteOrder(order.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer" title="Move to Trash">
+                                  <Trash2 size={15} />
+                                </button>
+                                <button 
+                                  onClick={() => handleBookCourier(order.id)} 
+                                  disabled={bookingOrderId === order.id || isAlreadyBooked} 
+                                  className={`transition-colors ${bookingOrderId === order.id || isAlreadyBooked ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:text-emerald-600 dark:hover:text-emerald-400'}`} 
+                                  title={isAlreadyBooked ? "Already Booked" : "Book to Steadfast"}
+                                >
+                                  {bookingOrderId === order.id ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
+                                </button>
+                              </>
+                            )}
+                            <Link href={`/dashboard/orders/${order.id}/invoice`} target="_blank" className="hover:text-slate-700 dark:hover:text-gray-300 transition-colors" title="Print Invoice">
+                              <Printer size={15} />
+                            </Link>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleRestoreOrder(order.id)} className="text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer" title="Restore Order">
+                              <RotateCcw size={16} />
+                            </button>
+                            <button onClick={() => handlePermanentDelete(order.id)} className="text-red-600 hover:text-red-700 transition-colors cursor-pointer" title="Permanent Delete">
+                              <Trash2 size={16} />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  {/* Card Body */}
-                  <div className="p-4 flex justify-between items-start">
-                    <div>
-                      <h4 className="text-[14px] font-bold text-slate-800 dark:text-gray-100">{order.customer?.name}</h4>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{order.customer?.phone}</p>
-                    </div>
-                    
-                    <div className="text-right flex flex-col items-end gap-1.5">
-                      <span className="text-[12px] font-bold text-slate-400 dark:text-gray-500">
-                        Total: ৳ {order.totalAmount}
-                      </span>
-                      <span className="text-[14px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-500/20 shadow-sm">
-                        COD: ৳ {dueAmount}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Product Thumbnail Row */}
-                  <div className="mx-4 mb-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-lg p-2 flex justify-between items-center transition-colors">
-                    <div className="w-8 h-8 rounded shadow-sm border border-black/10 dark:border-white/10 overflow-hidden">
-                       {imageRender}
-                    </div>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400 font-medium">{orderItemsCount} Items</span>
-                  </div>
-
-                  {/* Card Footer */}
-                  <div className="p-4 pt-2 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center">
-                    <button 
-                      onClick={() => setSelectedOrder(order)}
-                      className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-gray-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                    >
-                      <Eye size={14} /> View Details
-                    </button>
-                    <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
-                      {!order.isDeleted ? (
-                        <>
-                          {isModifiable && (
-                            <>
-                              <Link href={`/dashboard/orders/${order.id}/edit`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Edit Order">
-                                <Edit3 size={15} />
-                              </Link>
-                              <button onClick={() => handleDeleteOrder(order.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer" title="Move to Trash">
-                                <Trash2 size={15} />
-                              </button>
-                              <button 
-                                onClick={() => handleBookCourier(order.id)} 
-                                disabled={bookingOrderId === order.id || isAlreadyBooked} 
-                                className={`transition-colors ${bookingOrderId === order.id || isAlreadyBooked ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:text-emerald-600 dark:hover:text-emerald-400'}`} 
-                                title={isAlreadyBooked ? "Already Booked" : "Book to Steadfast"}
-                              >
-                                {bookingOrderId === order.id ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
-                              </button>
-                            </>
-                          )}
-                          <Link href={`/dashboard/orders/${order.id}/invoice`} target="_blank" className="hover:text-slate-700 dark:hover:text-gray-300 transition-colors" title="Print Invoice">
-                            <Printer size={15} />
-                          </Link>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => handleRestoreOrder(order.id)} className="text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer" title="Restore Order">
-                            <RotateCcw size={16} />
-                          </button>
-                          <button onClick={() => handlePermanentDelete(order.id)} className="text-red-600 hover:text-red-700 transition-colors cursor-pointer" title="Permanent Delete">
-                            <Trash2 size={16} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {/* 🚀 LOAD MORE BUTTON */}
+            {hasMore && (
+              <div className="flex justify-center mt-8 pb-4">
+                <button
+                  onClick={() => {
+                    const nextPage = page + 1;
+                    setPage(nextPage);
+                    fetchOrders(nextPage, searchQuery);
+                  }}
+                  disabled={isFetchingMore}
+                  className="bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-6 py-2.5 rounded-full font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  {isFetchingMore ? (
+                    <><Loader2 size={16} className="animate-spin" /> Loading...</>
+                  ) : (
+                    "Load More Orders"
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -658,7 +723,7 @@ export default function OrdersPage() {
                       <div key={idx} className="flex justify-between items-center border border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] p-3 rounded-xl transition-colors">
                         <div className="flex items-center gap-3">
                           <div className={`w-12 h-12 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center overflow-hidden shadow-sm border border-black/10 dark:border-white/10`}>
-                             {itemImageRender}
+                              {itemImageRender}
                           </div>
                           <div>
                             <h4 className="text-[13px] font-bold text-slate-800 dark:text-gray-100">{item.product?.name || 'Unknown Product'}</h4>
