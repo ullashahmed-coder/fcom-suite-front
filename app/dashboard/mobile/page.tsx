@@ -1,35 +1,29 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   ShoppingBag, Package, RotateCcw, Box, DollarSign, 
   Truck, AlertTriangle, ArrowRight, Plus, CheckCircle2, XCircle, Clock, 
-  BarChart3, Users, Settings as SettingsIcon, Flame, Zap
+  BarChart3, Users, Settings as SettingsIcon, Flame, Zap, CalendarDays
 } from "lucide-react";
 import Link from "next/link";
 
 export default function TenantDashboardHome() {
-  const [userName, setUserName] = useState("Saiful");
+  const [userName, setUserName] = useState("User");
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Today & Last 30 days stats
-  const [stats, setStats] = useState({
-    salesToday: 0,
-    ordersToday: 0,
-    total: 0,
-    delivered: 0,
-    deliveredAmount: 0,
-    pending: 0,
-    pendingAmount: 0,
-    cancelled: 0,
-    cancelledAmount: 0
+  const [dateFilter, setDateFilter] = useState("Last 30 Days");
+  const defaultFilters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days"];
+
+  const [todayStats, setTodayStats] = useState({
+    sales: 0,
+    newOrders: 0
   });
 
-  // 🚀 ডাইনামিক লিমিট স্টোর করার জন্য স্টেট
   const [usageOrders, setUsageOrders] = useState(0);
-  const [totalOrderLimit, setTotalOrderLimit] = useState(50); // ডিফল্ট
+  const [totalOrderLimit, setTotalOrderLimit] = useState(50);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -48,14 +42,12 @@ export default function TenantDashboardHome() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
-      // 🚀 ব্যাকএন্ড থেকে usage API ও একসাথে কল করা হচ্ছে
       const [prodRes, orderRes, usageRes] = await Promise.all([
-        fetch(`${apiUrl}/products`, { headers }),
-        fetch(`${apiUrl}/orders`, { headers }),
+        fetch(`${apiUrl}/products?limit=5000`, { headers }),
+        fetch(`${apiUrl}/orders?limit=5000`, { headers }),
         fetch(`${apiUrl}/billing/usage`, { headers })
       ]);
 
-      // ১. Usage ও Limit ডাটা সেট করা
       if (usageRes.ok) {
         const usageData = await usageRes.json();
         if (usageData.success) {
@@ -66,56 +58,38 @@ export default function TenantDashboardHome() {
 
       let allOrdersData: any[] = [];
 
-      // ২. অর্ডার ডাটা প্রসেস করা
       if (orderRes.ok) {
-        allOrdersData = await orderRes.json();
+        const rawOrderData = await orderRes.json();
+        allOrdersData = rawOrderData.data || rawOrderData;
+        
         const activeOrders = allOrdersData.filter((o: any) => !o.isDeleted);
         setOrders(activeOrders);
 
         const todayString = new Date().toDateString();
         let salesToday = 0;
-        let ordersToday = 0;
-
-        let tot = 0, del = 0, delAmt = 0, pend = 0, pendAmt = 0, canc = 0, cancAmt = 0;
+        let newOrdersCount = 0;
 
         activeOrders.forEach((o: any) => {
-          tot++;
           const amount = Number(o.totalAmount) || 0;
           const status = o.status?.toUpperCase() || "";
 
           if (o.createdAt && new Date(o.createdAt).toDateString() === todayString) {
-            ordersToday++;
             salesToday += amount;
           }
-
-          if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(status)) {
-            del++;
-            delAmt += amount;
-          } else if (['CANCELLED', 'RETURNED'].includes(status)) {
-            canc++;
-            cancAmt += amount;
-          } else {
-            pend++;
-            pendAmt += amount;
+          if (['NEW_ORDER', 'PENDING'].includes(status)) {
+            newOrdersCount++;
           }
         });
 
-        setStats({
-          salesToday,
-          ordersToday,
-          total: tot,
-          delivered: del,
-          deliveredAmount: delAmt,
-          pending: pend,
-          pendingAmount: pendAmt,
-          cancelled: canc,
-          cancelledAmount: cancAmt
+        setTodayStats({
+          sales: salesToday,
+          newOrders: newOrdersCount
         });
       }
 
-      // ৩. বেস্ট সেলিং প্রোডাক্ট প্রসেস করা
       if (prodRes.ok) {
-        const prods = await prodRes.json();
+        const rawProdData = await prodRes.json();
+        const prods = rawProdData.data || rawProdData;
         
         const salesById: Record<string, number> = {};
         const salesByName: Record<string, number> = {};
@@ -154,14 +128,76 @@ export default function TenantDashboardHome() {
     }
   };
 
-  // 🚀 ডাইনামিক ব্যানার লজিক: লিমিট -১ (Unlimited) হলে কখনোই ব্যানার দেখাবে না
+  const filteredStats = useMemo(() => {
+    let tot = 0, del = 0, delAmt = 0, pend = 0, pendAmt = 0, canc = 0, cancAmt = 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    orders.forEach((o: any) => {
+      const orderDate = new Date(o.createdAt || o.updatedAt);
+      orderDate.setHours(0, 0, 0, 0);
+
+      let passesFilter = false;
+
+      if (dateFilter === "Today") {
+        passesFilter = orderDate.getTime() === today.getTime();
+      } else if (dateFilter === "Yesterday") {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        passesFilter = orderDate.getTime() === yesterday.getTime();
+      } else if (dateFilter === "Last 7 Days") {
+        const last7 = new Date(today);
+        last7.setDate(today.getDate() - 7);
+        passesFilter = orderDate.getTime() >= last7.getTime();
+      } else if (dateFilter === "Last 30 Days") {
+        const last30 = new Date(today);
+        last30.setDate(today.getDate() - 30);
+        passesFilter = orderDate.getTime() >= last30.getTime();
+      } else if (/^\d{4}-\d{2}$/.test(dateFilter)) { 
+        const [year, month] = dateFilter.split('-');
+        passesFilter = orderDate.getMonth() === Number(month) - 1 && orderDate.getFullYear() === Number(year);
+      } else {
+        passesFilter = true; // All Time
+      }
+
+      if (passesFilter) {
+        tot++;
+        const amount = Number(o.totalAmount) || 0;
+        const status = o.status?.toUpperCase() || "";
+
+        if (['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'DELIVERED_APPROVAL_PENDING'].includes(status)) {
+          del++;
+          delAmt += amount;
+        } else if (['CANCELLED', 'RETURNED'].includes(status)) {
+          canc++;
+          cancAmt += amount;
+        } else {
+          pend++;
+          pendAmt += amount;
+        }
+      }
+    });
+
+    return { total: tot, delivered: del, deliveredAmount: delAmt, pending: pend, pendingAmount: pendAmt, cancelled: canc, cancelledAmount: cancAmt };
+  }, [orders, dateFilter]);
+
+  const getDisplayFilterName = (val: string) => {
+    if (/^\d{4}-\d{2}$/.test(val)) {
+      const [year, month] = val.split('-');
+      const date = new Date(Number(year), Number(month) - 1);
+      return date.toLocaleString('en-US', { month: 'long', year: 'numeric' }); 
+    }
+    return val;
+  };
+
+  const isMonthFormat = /^\d{4}-\d{2}$/.test(dateFilter);
   const remainingOrders = totalOrderLimit === -1 ? 'Unlimited' : Math.max(0, totalOrderLimit - usageOrders);
   const showUpgradeBanner = totalOrderLimit !== -1 && (remainingOrders as number) <= 10;
 
   return (
     <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f1714] text-slate-800 dark:text-white pb-28 font-sans selection:bg-emerald-500 selection:text-white overflow-x-hidden">
       
-      {/* 🟢 Top Header (Brand Color always) */}
       <div className="bg-emerald-600 dark:bg-[#132e25] pt-6 pb-10 px-5 rounded-b-[35px] shadow-lg relative border-b border-emerald-700/50 dark:border-white/5 z-0">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
@@ -178,7 +214,6 @@ export default function TenantDashboardHome() {
           </span>
         </div>
 
-        {/* 📊 Today's Summary Box */}
         <div className="bg-white dark:bg-[#1a2421] border border-gray-100 dark:border-white/10 rounded-2xl p-4 shadow-md relative">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Today's Summary</h3>
@@ -188,11 +223,11 @@ export default function TenantDashboardHome() {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-50 dark:bg-[#141d1a] p-3.5 rounded-xl border border-gray-100 dark:border-white/5">
               <p className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Sells Today</p>
-              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">৳ {stats.salesToday.toLocaleString()}</h3>
+              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">৳ {todayStats.sales.toLocaleString()}</h3>
             </div>
             <div className="bg-slate-50 dark:bg-[#141d1a] p-3.5 rounded-xl border border-gray-100 dark:border-white/5">
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Orders Today</p>
-              <h3 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white">{stats.ordersToday}</h3>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">New Orders</p>
+              <h3 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white">{todayStats.newOrders}</h3>
             </div>
           </div>
         </div>
@@ -200,7 +235,6 @@ export default function TenantDashboardHome() {
 
       <div className="px-4 -mt-4 space-y-5 relative z-10">
 
-        {/* 🛑 UPGRADE BANNER */}
         {!loading && showUpgradeBanner && (
           <div className="bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl p-4 shadow-xl flex items-center justify-between border border-orange-500/30 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-3">
@@ -223,7 +257,6 @@ export default function TenantDashboardHome() {
           </div>
         )}
         
-        {/* ⚡ Quick Actions (8 Grid Icons) */}
         <div className="bg-white dark:bg-[#1a2421] rounded-2xl p-4 shadow-md border border-gray-100 dark:border-white/10">
           <h3 className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-3.5">Quick Actions</h3>
           
@@ -288,69 +321,106 @@ export default function TenantDashboardHome() {
           </div>
         </div>
 
-        {/* 📊 Last 30 Days Stats */}
-        <div className="space-y-2.5">
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Last 30 Days</h3>
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">At a glance</span>
+        <div className="space-y-3 pt-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-1 gap-2">
+            
+            <div className="flex items-center bg-white dark:bg-[#1a2421] p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm overflow-x-auto w-full sm:w-auto max-w-full custom-scrollbar">
+              {defaultFilters.map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setDateFilter(filter)}
+                  className={`px-3.5 py-1.5 text-[10px] sm:text-[11px] rounded-md transition-colors whitespace-nowrap font-bold ${
+                    dateFilter === filter 
+                      ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-100 dark:border-emerald-500/20" 
+                      : "text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-gray-200 hover:bg-slate-50 dark:hover:bg-white/5"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+              
+              <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1 shrink-0"></div>
+              
+              <input 
+                type="month"
+                value={isMonthFormat ? dateFilter : ""}
+                onChange={(e) => {
+                  if(e.target.value) {
+                    setDateFilter(e.target.value);
+                  } else {
+                    setDateFilter("All Time"); 
+                  }
+                }}
+                title="Select Month (Clear to see All Time)"
+                className={`px-2 py-1 text-[10px] sm:text-[11px] font-bold rounded-md outline-none cursor-pointer transition-colors border shrink-0 ${
+                  isMonthFormat
+                    ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm border-emerald-100 dark:border-emerald-500/20"
+                    : dateFilter === "All Time"
+                      ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shadow-sm border-indigo-100 dark:border-indigo-500/20"
+                      : "bg-transparent text-slate-500 dark:text-gray-400 border-transparent hover:text-slate-800 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-white/5"
+                }`}
+              />
+            </div>
+
+            <span className="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-bold shrink-0">At a glance</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             
-            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2 transition-colors">
               <div className="w-8 h-8 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center">
                 <Box size={16} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">TOTAL</p>
-                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.total}</h3>
-                <p className="text-[11px] text-slate-400 dark:text-gray-400 mt-1">Last 30 days</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{filteredStats.total.toLocaleString()}</h3>
+                <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-1">{getDisplayFilterName(dateFilter)}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2 transition-colors">
               <div className="w-8 h-8 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center">
                 <CheckCircle2 size={16} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">DELIVERED</p>
-                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.delivered}</h3>
-                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">৳ {stats.deliveredAmount.toLocaleString()}</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{filteredStats.delivered.toLocaleString()}</h3>
+                <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">৳ {filteredStats.deliveredAmount.toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2 transition-colors">
               <div className="w-8 h-8 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center">
                 <Clock size={16} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">PENDING</p>
-                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.pending}</h3>
-                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-1">৳ {stats.pendingAmount.toLocaleString()}</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{filteredStats.pending.toLocaleString()}</h3>
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-1">৳ {filteredStats.pendingAmount.toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-[#1a2421] p-4 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm space-y-2 transition-colors">
               <div className="w-8 h-8 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center">
                 <XCircle size={16} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">CANCELLED</p>
-                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{stats.cancelled}</h3>
-                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 mt-1">৳ {stats.cancelledAmount.toLocaleString()}</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-white mt-0.5">{filteredStats.cancelled.toLocaleString()}</h3>
+                <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 mt-1">৳ {filteredStats.cancelledAmount.toLocaleString()}</p>
               </div>
             </div>
 
           </div>
         </div>
 
-        {/* 🌟 Top 5 Best Selling Products */}
         <div className="space-y-2.5 pt-2">
           <div className="flex justify-between items-center px-1">
             <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span> Best Selling Products
             </h3>
-            <Link href="/dashboard/products/best-selling" className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
+            {/* 🚀 এখানে লিংক ঠিক করে দেয়া হয়েছে */}
+            <Link href="/dashboard/best-sellers" className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
               View All &gt;
             </Link>
           </div>
@@ -364,7 +434,7 @@ export default function TenantDashboardHome() {
                 return (
                   <div 
                     key={item.id || index}
-                    className="min-w-[150px] sm:min-w-[170px] bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 p-3 shadow-sm shrink-0 snap-start flex flex-col justify-between relative group"
+                    className="min-w-[150px] sm:min-w-[170px] bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 p-3 shadow-sm shrink-0 snap-start flex flex-col justify-between relative group transition-colors"
                   >
                     <span className="absolute top-2 left-2 z-10 w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow">
                       #{index + 1}
@@ -400,7 +470,7 @@ export default function TenantDashboardHome() {
                 );
               })
             ) : (
-              <div className="w-full text-center py-6 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 text-slate-400 dark:text-gray-400 text-xs">
+              <div className="w-full text-center py-6 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-100 dark:border-white/10 text-slate-400 dark:text-gray-400 text-xs transition-colors">
                 No best selling products found.
               </div>
             )}
