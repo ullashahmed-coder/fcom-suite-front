@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Flame, Box, Loader2, Search, ShoppingBag, BarChart3, CalendarDays } from "lucide-react"
 
 export default function BestSellersPage() {
   const router = useRouter()
-  const [rawOrders, setRawOrders] = useState<any[]>([])
-  const [rawProducts, setRawProducts] = useState<any[]>([])
+  // এখন আর rawOrders বা rawProducts লাগবে না, সরাসরি ব্যাকএন্ড থেকে আসা ডেটা রাখবো
+  const [sarees, setSarees] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -16,23 +16,23 @@ export default function BestSellersPage() {
   const defaultFilters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "All Time"]
 
   useEffect(() => {
-    const fetchAllData = async () => {
+    const fetchBestSellers = async () => {
       try {
+        setIsLoading(true)
         const token = localStorage.getItem("access_token") || localStorage.getItem("token")
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
         
-        // 🚀 ড্যাশবোর্ডের মতো প্রোডাক্ট এবং অর্ডার একসাথেই ফেচ করা হচ্ছে যেন ফিল্টারিং করা সহজ হয়
-        const [prodRes, orderRes] = await Promise.all([
-          fetch(`${apiUrl}/products?limit=5000`, { headers: { "Authorization": `Bearer ${token}` } }),
-          fetch(`${apiUrl}/orders?limit=5000`, { headers: { "Authorization": `Bearer ${token}` } })
-        ]);
+        // 🚀 ব্যাকএন্ডের অপটিমাইজড API কল করা হচ্ছে (প্যারামিটার হিসেবে ফিল্টার পাঠানো হচ্ছে)
+        const res = await fetch(`${apiUrl}/products/best-sellers?filter=${encodeURIComponent(dateFilter)}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
 
-        if (prodRes.ok && orderRes.ok) {
-          const prodData = await prodRes.json();
-          const orderData = await orderRes.json();
+        if (res.ok) {
+          const json = await res.json();
+          const data = json.data || [];
           
-          setRawProducts(prodData?.data ? prodData.data : (Array.isArray(prodData) ? prodData : []));
-          setRawOrders(orderData?.data ? orderData.data : (Array.isArray(orderData) ? orderData : []));
+          // ব্যাকএন্ড থেকেই ক্যালকুলেট হয়ে ডেটা আসছে, তাই শুধু সেট করে দিলেই হবে
+          setSarees(data);
         }
       } catch (error) {
         console.error("Failed to fetch best sellers data", error)
@@ -40,75 +40,9 @@ export default function BestSellersPage() {
         setIsLoading(false)
       }
     }
-    fetchAllData()
-  }, [])
-
-  // 🚀 ডাইনামিক ফিল্টার অনুযায়ী ডাটা ক্যালকুলেট করার লজিক
-  const processedSarees = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const salesById: Record<string, number> = {};
-    const revenueById: Record<string, number> = {};
-
-    const activeOrders = rawOrders.filter((o: any) => !o.isDeleted);
-
-    activeOrders.forEach((o: any) => {
-      const orderDate = new Date(o.createdAt || o.updatedAt);
-      orderDate.setHours(0, 0, 0, 0);
-
-      let passesFilter = false;
-
-      if (dateFilter === "Today") {
-        passesFilter = orderDate.getTime() === today.getTime();
-      } else if (dateFilter === "Yesterday") {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        passesFilter = orderDate.getTime() === yesterday.getTime();
-      } else if (dateFilter === "Last 7 Days") {
-        const last7 = new Date(today);
-        last7.setDate(today.getDate() - 7);
-        passesFilter = orderDate.getTime() >= last7.getTime();
-      } else if (dateFilter === "Last 30 Days") {
-        const last30 = new Date(today);
-        last30.setDate(today.getDate() - 30);
-        passesFilter = orderDate.getTime() >= last30.getTime();
-      } else if (/^\d{4}-\d{2}$/.test(dateFilter)) { 
-        // 🚀 Month Picker Filter Logic (e.g., 2026-09)
-        const [year, month] = dateFilter.split('-');
-        passesFilter = orderDate.getMonth() === Number(month) - 1 && orderDate.getFullYear() === Number(year);
-      } else {
-        passesFilter = true; // All Time
-      }
-
-      // যদি অর্ডারটি সিলেক্ট করা সময়ের মধ্যে হয়, তবেই সেলস কাউন্ট হবে
-      if (passesFilter && o.items && Array.isArray(o.items)) {
-        o.items.forEach((item: any) => {
-          const qty = Number(item.quantity) || 1;
-          const price = Number(item.price) || 0;
-          const revenue = qty * price;
-          const pId = item.productId || item.product?.id || item.id;
-          
-          if (pId) {
-            salesById[String(pId)] = (salesById[String(pId)] || 0) + qty;
-            revenueById[String(pId)] = (revenueById[String(pId)] || 0) + revenue;
-          }
-        });
-      }
-    });
-
-    const ranked = rawProducts
-      .filter((p: any) => !p.isDeleted)
-      .map((p: any) => {
-        const sold = salesById[String(p.id)] || 0;
-        const rev = revenueById[String(p.id)] || 0;
-        return { ...p, sold, revenue: rev };
-      })
-      .filter((p: any) => p.sold > 0) // 🚀 শুধুমাত্র যেগুলোর বিক্রি হয়েছে সেগুলোই দেখাবে
-      .sort((a: any, b: any) => b.sold - a.sold);
-
-    return ranked;
-  }, [rawOrders, rawProducts, dateFilter]);
+    
+    fetchBestSellers()
+  }, [dateFilter]) // 🚀 dateFilter পরিবর্তন হলেই শুধু নতুন করে ফেচ করবে
 
   const getImageUrl = (path: string) => {
     if (!path) return "";
@@ -127,22 +61,13 @@ export default function BestSellersPage() {
   };
 
   // সার্চ ফিল্টার লজিক
-  const filteredSarees = processedSarees.filter(saree => 
+  const filteredSarees = sarees.filter(saree => 
     (saree.name && saree.name.toLowerCase().includes(searchQuery.toLowerCase())) || 
     (saree.sku && saree.sku.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   const totalItemsSold = filteredSarees.reduce((sum, item) => sum + (item.sold || 0), 0)
   const totalRevenueGenerated = filteredSarees.reduce((sum, item) => sum + (item.revenue || 0), 0)
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[80vh] gap-3">
-        <Loader2 className="animate-spin text-amber-500" size={40} />
-        <p className="text-slate-500 dark:text-gray-400 font-medium">লোডিং বেস্ট সেলার্স...</p>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-[1500px] mx-auto pb-10 p-4 sm:p-6 space-y-6 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen transition-colors duration-300">
@@ -233,60 +158,70 @@ export default function BestSellersPage() {
         </div>
       </div>
 
-      {/* ================= Saree Grid ================= */}
-      {filteredSarees.length === 0 ? (
-        <div className="bg-white dark:bg-[#1a2421] p-16 sm:p-20 rounded-2xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-slate-400 dark:text-gray-500 gap-3 transition-colors">
-          <CalendarDays size={48} className="opacity-40" />
-          <h3 className="text-lg font-bold text-slate-600 dark:text-gray-300 text-center">
-            {isMonthFormat ? `এই মাসে (${getDisplayFilterName(dateFilter)}) কোনো প্রোডাক্ট বিক্রি হয়নি।` : 'এই সময়ে কোনো প্রোডাক্ট বিক্রি হয়নি।'}
-          </h3>
+      {/* ================= Loading State ================= */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center h-[40vh] gap-3">
+          <Loader2 className="animate-spin text-amber-500" size={40} />
+          <p className="text-slate-500 dark:text-gray-400 font-medium">ডাটাবেস থেকে ক্যালকুলেট করা হচ্ছে...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-          {filteredSarees.map((saree, index) => (
-            <div key={saree.id || index} className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-lg dark:hover:border-white/20 transition-all p-3 sm:p-4 relative flex flex-col group">
-              
-              {/* Rank Badge */}
-              <div className={`absolute -top-3 -left-3 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-black shadow-md z-10 border-2 dark:border-[#1a2421] border-white
-                ${index === 0 ? 'bg-amber-400 text-amber-900' : 
-                  index === 1 ? 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-white' : 
-                  index === 2 ? 'bg-amber-700 text-white dark:bg-amber-600' : 
-                  'bg-white dark:bg-[#141d1a] text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'}`}
-              >
-                #{index + 1}
-              </div>
-
-              {/* Image */}
-              <div className="bg-slate-50 dark:bg-[#141d1a] rounded-xl h-36 sm:h-48 mb-3 sm:mb-4 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-white/5">
-                {saree.thumbnail || saree.imageUrl ? (
-                  <img 
-                    src={getImageUrl(saree.thumbnail || saree.imageUrl)} 
-                    alt={saree.name} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                  />
-                ) : (
-                  <span className="text-slate-400 dark:text-gray-600 font-bold text-xs">No Image</span>
-                )}
-              </div>
-
-              {/* Details */}
-              <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-gray-100 mb-3 sm:mb-4 line-clamp-2 leading-tight" title={saree.name}>
-                {saree.name}
-              </h4>
-
-              <div className="flex justify-between items-end mt-auto pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-white/10">
-                <div>
-                  <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-wider">Total Sold</p>
-                  <p className="text-base sm:text-lg font-black text-slate-700 dark:text-gray-200">{saree.sold}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-wider">Revenue</p>
-                  <p className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">৳ {saree.revenue.toLocaleString('en-IN')}</p>
-                </div>
-              </div>
+        <>
+          {/* ================= Saree Grid ================= */}
+          {filteredSarees.length === 0 ? (
+            <div className="bg-white dark:bg-[#1a2421] p-16 sm:p-20 rounded-2xl border border-gray-200 dark:border-white/10 flex flex-col items-center justify-center text-slate-400 dark:text-gray-500 gap-3 transition-colors">
+              <CalendarDays size={48} className="opacity-40" />
+              <h3 className="text-lg font-bold text-slate-600 dark:text-gray-300 text-center">
+                {isMonthFormat ? `এই মাসে (${getDisplayFilterName(dateFilter)}) কোনো প্রোডাক্ট বিক্রি হয়নি।` : 'এই সময়ে কোনো প্রোডাক্ট বিক্রি হয়নি।'}
+              </h3>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+              {filteredSarees.map((saree, index) => (
+                <div key={saree.id || index} className="bg-white dark:bg-[#1a2421] rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-lg dark:hover:border-white/20 transition-all p-3 sm:p-4 relative flex flex-col group">
+                  
+                  {/* Rank Badge */}
+                  <div className={`absolute -top-3 -left-3 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-black shadow-md z-10 border-2 dark:border-[#1a2421] border-white
+                    ${index === 0 ? 'bg-amber-400 text-amber-900' : 
+                      index === 1 ? 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-white' : 
+                      index === 2 ? 'bg-amber-700 text-white dark:bg-amber-600' : 
+                      'bg-white dark:bg-[#141d1a] text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'}`}
+                  >
+                    #{index + 1}
+                  </div>
+
+                  {/* Image */}
+                  <div className="bg-slate-50 dark:bg-[#141d1a] rounded-xl h-36 sm:h-48 mb-3 sm:mb-4 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-white/5">
+                    {saree.thumbnail || saree.imageUrl ? (
+                      <img 
+                        src={getImageUrl(saree.thumbnail || saree.imageUrl)} 
+                        alt={saree.name} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                      />
+                    ) : (
+                      <span className="text-slate-400 dark:text-gray-600 font-bold text-xs">No Image</span>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-gray-100 mb-3 sm:mb-4 line-clamp-2 leading-tight" title={saree.name}>
+                    {saree.name}
+                  </h4>
+
+                  <div className="flex justify-between items-end mt-auto pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-white/10">
+                    <div>
+                      <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-wider">Total Sold</p>
+                      <p className="text-base sm:text-lg font-black text-slate-700 dark:text-gray-200">{saree.sold}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-wider">Revenue</p>
+                      <p className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">৳ {saree.revenue.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

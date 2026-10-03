@@ -1,823 +1,1066 @@
 "use client";
 
-import Link from "next/link";
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { 
-  Search, LayoutGrid, List as ListIcon, 
-  Edit3, Trash2, Truck, Printer, Eye, X, User, Loader2, RotateCcw, Box, CheckCircle, CheckCircle2, Calendar
+  Search, Users, Briefcase, DollarSign, 
+  Wallet, Calendar, CheckCircle2, 
+  CreditCard, FileText, Phone, Loader2, Info,
+  Package, Truck, RotateCcw, X, Landmark, Receipt, CalendarDays, Clock, Layers, User, Copy
 } from "lucide-react";
 
-export default function OrdersPage() {
-  const [mounted, setMounted] = useState(false);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [bookingOrderId, setBookingOrderId] = useState<string | null>(null);
-
-  const [isBulkBooking, setIsBulkBooking] = useState(false);
-
-  const [activeTab, setActiveTab] = useState("New orders");
-  const [timeFilter, setTimeFilter] = useState("ALL"); 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+export default function StaffPayrollPage() {
+  const [activeTab, setActiveTab] = useState<"directory" | "history">("directory");
   
-  const [selectedOrder, setSelectedOrder] = useState<any>(null); 
+  const [rawUsers, setRawUsers] = useState<any[]>([]);
+  const [rawOrders, setRawOrders] = useState<any[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<any[]>([]);
+  
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
-  // 🚀 New States for Pagination (Load More)
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [totalOrdersCount, setTotalOrdersCount] = useState(0); // Optional: to show total in 'All orders' tab
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  const getLocalMonthStr = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [dateFilter, setDateFilter] = useState<string>(getLocalMonthStr()); 
+  const quickFilters = ["Today", "Yesterday", "Last 7 Days"];
+
+  // Individual Payment Modal
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    bonus: "",
+    deduction: "",
+    method: "Cash Handover"
+  });
+
+  // Bulk Payment Modal States
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkPaymentMethod, setBulkPaymentMethod] = useState("Cash Handover");
+
+  // Clickable Order List Modal
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [modalOrdersTitle, setModalOrdersTitle] = useState("");
+  const [filteredModalOrders, setFilteredModalOrders] = useState<any[]>([]);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-  // 🚀 Updated Fetch Function for Pagination and Server-Side Search
-  const fetchOrders = async (pageNum = 1, search = searchQuery) => {
-    if (pageNum === 1) setIsLoading(true);
-    else setIsFetchingMore(true);
-
+  const fetchStaffAndOrders = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders?page=${pageNum}&limit=50&search=${encodeURIComponent(search)}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const headers = { "Authorization": `Bearer ${token}` };
       
-      if (res.ok) {
-        const result = await res.json();
-        // Since backend now returns { data, meta }
-        const fetchedOrders = result.data || [];
-        
-        if (pageNum === 1) {
-          setOrders(fetchedOrders);
-        } else {
-          setOrders(prev => [...prev, ...fetchedOrders]);
-        }
-        
-        // Handle pagination logic
-        if (result.meta) {
-          setHasMore(result.meta.page < result.meta.totalPages);
-          setTotalOrdersCount(result.meta.total);
-        } else {
-          setHasMore(fetchedOrders.length === 50);
-        }
+      // 🚀 FIXED: Added page=1 and Timestamp cache buster so it gets the exact same data as OrdersPage
+      const t = Date.now();
+
+      const [usersRes, ordersRes, payrollRes] = await Promise.all([
+        fetch(`${apiUrl}/users?limit=5000&_t=${t}`, { headers }),
+        fetch(`${apiUrl}/orders?page=1&limit=5000&_t=${t}`, { headers }),
+        fetch(`${apiUrl}/users/payroll/history?_t=${t}`, { headers }) 
+      ]);
+      
+      if (usersRes.ok && ordersRes.ok && payrollRes.ok) {
+        const usersDataRaw = await usersRes.json();
+        const ordersDataRaw = await ordersRes.json();
+
+        setRawUsers(usersDataRaw.data || usersDataRaw);
+        setRawOrders(ordersDataRaw.data || ordersDataRaw);
+        setPayrollHistory(await payrollRes.json());
       }
     } catch (error) {
-      console.error("Failed to fetch orders:", error);
+      console.error("Failed to fetch data:", error);
     } finally {
       setIsLoading(false);
-      setIsFetchingMore(false);
     }
   };
 
   useEffect(() => {
-    setMounted(true);
+    fetchStaffAndOrders();
   }, []);
 
-  // 🚀 Debounced Search Effect
   useEffect(() => {
-    // 500ms delay after user stops typing to trigger backend search
-    const delayDebounceFn = setTimeout(() => {
-      setPage(1);
-      fetchOrders(1, searchQuery);
-    }, 500);
+    if (rawUsers.length === 0) return;
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]); // Runs whenever searchQuery changes
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const startOf7DaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
 
+    const isMonthFilter = /^\d{4}-\d{2}$/.test(dateFilter);
 
-  const handleDeleteOrder = async (id: string) => {
-    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি ট্র্যাশে পাঠাতে চান? স্টক ইনভেন্টরিতে ফিরিয়ে দেওয়া হবে।")) return;
+    const formattedStaff = rawUsers.map((user: any) => {
+      let filterStartDate: Date;
+      let filterEndDate: Date;
 
-    try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        alert("✅ অর্ডারটি ট্র্যাশে পাঠানো হয়েছে।");
-        setSelectedOrder(null);
-        setPage(1);
-        fetchOrders(1, searchQuery); 
+      if (dateFilter === "Today") {
+        filterStartDate = startOfToday;
+        filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+      } else if (dateFilter === "Yesterday") {
+        filterStartDate = startOfYesterday;
+        filterEndDate = new Date(startOfToday.getTime() - 1);
+      } else if (dateFilter === "Last 7 Days") {
+        filterStartDate = startOf7DaysAgo;
+        filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+      } else if (isMonthFilter) {
+        const [year, month] = dateFilter.split("-").map(Number);
+        filterStartDate = new Date(year, month - 1, 1);
+        filterEndDate = new Date(year, month, 0, 23, 59, 59, 999);
       } else {
-        alert("❌ অর্ডার ট্র্যাশে পাঠানো সম্ভব হয়নি।");
+        filterStartDate = new Date(0); 
+        filterEndDate = new Date();
       }
-    } catch (err) {
-      console.error("Delete error:", err);
-      alert("সার্ভার এরর।");
-    }
-  };
 
-  const handleRestoreOrder = async (id: string) => {
-    if (!window.confirm("অর্ডারটি কি রিস্টোর করতে চান?")) return;
-    try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders/${id}/restore`, {
-        method: "PATCH",
-        headers: { "Authorization": `Bearer ${token}` }
+      const userOrders = rawOrders.filter((o: any) => {
+        if (o.isDeleted) return false;
+        if (o.userId !== user.id && o.user?.id !== user.id) return false;
+        const orderDate = new Date(o.createdAt || o.updatedAt);
+        return orderDate >= filterStartDate && orderDate <= filterEndDate;
       });
       
-      if (res.ok) {
-        alert("✅ অর্ডারটি রিস্টোর করা হয়েছে!");
-        setSelectedOrder(null);
-        setPage(1);
-        fetchOrders(1, searchQuery); 
-      } else {
-        alert("❌ রিস্টোর করা সম্ভব হয়নি।");
-      }
-    } catch (error) {
-      console.error("Restore error:", error);
-    }
-  };
+      const createdCount = userOrders.length;
 
-  const handlePermanentDelete = async (id: string) => {
-    if (!window.confirm("অর্ডারটি কি স্থায়ীভাবে (Permanent) ডিলিট করতে চান? এটি আর ফেরত আনা যাবে না।")) return;
-    try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders/${id}/permanent`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const createdItemsCount = userOrders.reduce((sum: number, o: any) => {
+        return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0);
+      }, 0);
       
-      if (res.ok) {
-        alert("✅ অর্ডারটি স্থায়ীভাবে ডিলিট করা হয়েছে!");
-        setSelectedOrder(null);
-        setPage(1);
-        fetchOrders(1, searchQuery); 
-      } else {
-        alert("❌ ডিলিট করা সম্ভব হয়নি।");
-      }
-    } catch (error) {
-      console.error("Permanent delete error:", error);
-    }
-  };
+      const deliveredOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('DELIVERED') || status === 'PARTIAL';
+      });
+      const deliveredParcels = deliveredOrders.length;
+      
+      const deliveredItemsCount = deliveredOrders.reduce((sum: number, o: any) => {
+        return sum + (o.items?.reduce((s: number, item: any) => {
+          const returned = item.returnedQty || 0; 
+          const kept = item.quantity - returned;  
+          return s + (kept > 0 ? kept : 0);
+        }, 0) || 0);
+      }, 0);
+      
+      const returnedOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('RETURNED') || status.includes('CANCELLED');
+      });
+      const returnedCount = returnedOrders.length;
 
-  const handleBookCourier = async (orderId: string) => {
-    if (!window.confirm("আপনি কি এই পার্সেলটি Steadfast-এ বুক করতে চান?")) return;
-    
-    setBookingOrderId(orderId);
-    try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${apiUrl}/orders/${orderId}/book-steadfast`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        alert(`✅ সফলভাবে বুকিং হয়েছে! Consignment ID: ${data.consignment?.consignment_id || data.consignment?.tracking_code}`);
-        setPage(1);
-        fetchOrders(1, searchQuery); 
-        if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder(null); 
+      const returnedItemsCount = userOrders.reduce((sum: number, o: any) => {
+        const status = (o.status || '').toUpperCase();
+        if (status.includes('RETURNED') || status.includes('CANCELLED')) {
+          return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0);
+        } else {
+          return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.returnedQty) || 0), 0) || 0);
+        }
+      }, 0);
+
+      let calculatedBasicSalary = 0;
+      let salaryNote = "";
+      const fullBasicSalary = user.basicSalary || 0;
+      const joinDate = new Date(user.createdAt);
+
+      if (isMonthFilter) {
+        const joinYearMonth = `${joinDate.getFullYear()}-${String(joinDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (joinYearMonth === dateFilter) {
+          const daysInMonth = filterEndDate.getDate();
+          const daysWorked = daysInMonth - joinDate.getDate() + 1;
+          calculatedBasicSalary = Math.round((fullBasicSalary / daysInMonth) * daysWorked);
+          salaryNote = `(Pro-rated for ${daysWorked} days)`;
+        } else if (joinDate < filterStartDate) {
+          calculatedBasicSalary = fullBasicSalary;
+        } else {
+          calculatedBasicSalary = 0;
+          salaryNote = "(Joined after this month)";
         }
       } else {
-        alert(`❌ বুকিং ব্যর্থ হয়েছে: ${data.message || "Unknown error"}`);
+        calculatedBasicSalary = 0;
+        salaryNote = "(Basic salary applies to full months only)";
       }
-    } catch (error) {
-      console.error("Booking error:", error);
-      alert("সার্ভার এরর! বুকিং করা যায়নি।");
-    } finally {
-      setBookingOrderId(null);
+
+      const commissionRate = user.commission || 0;
+      const commissionAmount = commissionRate * deliveredItemsCount; 
+      
+      const netPayable = calculatedBasicSalary + commissionAmount;
+
+      return {
+        ...user,
+        calculatedBasicSalary,
+        fullBasicSalary,
+        salaryNote,
+        commissionRate,
+        createdCount,
+        createdItemsCount,
+        deliveredParcels,
+        deliveredItemsCount,
+        returnedCount,
+        returnedItemsCount,
+        commissionAmount,
+        netPayable,
+        pendingPay: user.status === "Active" ? netPayable : 0,
+        joinDate: joinDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        avatarBg: user.role?.includes("ADMIN") || user.role === "SHOP_OWNER" ? "bg-purple-600" : user.role === "OPERATOR" ? "bg-cyan-600" : "bg-emerald-600"
+      };
+    });
+
+    setStaffList(formattedStaff);
+    
+    if (selectedStaff) {
+      const updatedSelected = formattedStaff.find((s: any) => s.id === selectedStaff.id);
+      if (updatedSelected) setSelectedStaff(updatedSelected);
+    } else if (formattedStaff.length > 0) {
+      setSelectedStaff(formattedStaff[0]);
+    }
+
+  }, [rawUsers, rawOrders, dateFilter]); 
+
+  const filteredStaff = staffList.filter(staff => 
+    staff.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    staff.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    staff.phone?.includes(searchQuery)
+  );
+
+  const filteredHistory = payrollHistory.filter(h => 
+    h.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    h.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalStaff = staffList.length;
+  const activeStaff = staffList.filter(s => s.status !== "Inactive").length;
+  const totalPayroll = staffList.reduce((acc, curr) => acc + curr.netPayable, 0);
+  const totalPending = staffList.reduce((acc, curr) => acc + curr.pendingPay, 0);
+
+  const finalPaymentAmount = selectedStaff 
+    ? selectedStaff.netPayable + (Number(paymentForm.bonus) || 0) - (Number(paymentForm.deduction) || 0) 
+    : 0;
+
+  const handleItemClick = (staff: any) => {
+    setSelectedStaff(staff);
+    if (window.innerWidth < 1024) {
+      setIsMobileDrawerOpen(true);
+    } else {
+      setTimeout(() => {
+        document.getElementById('details-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     }
   };
 
-  const handleBulkBookCourier = async () => {
-    if (selectedOrderIds.length === 0) return;
+  const handleOpenOrdersModal = (type: "CREATED" | "DELIVERED" | "RETURNED", targetStaff: any) => {
+    if (!targetStaff) return;
 
-    const eligibleOrderIds = selectedOrderIds.filter(id => {
-      const order = orders.find(o => o.id === id);
-      return order && !order.consignmentId && order.status !== 'IN_REVIEW';
-    });
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const startOf7DaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    const isMonthFilter = /^\d{4}-\d{2}$/.test(dateFilter);
 
-    if (eligibleOrderIds.length === 0) {
-      alert("❌ নির্বাচিত পার্সেলগুলো আগে থেকেই Steadfast-এ বুক করা আছে!");
-      return;
+    let filterStartDate: Date;
+    let filterEndDate: Date;
+
+    if (dateFilter === "Today") {
+      filterStartDate = startOfToday;
+      filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+    } else if (dateFilter === "Yesterday") {
+      filterStartDate = startOfYesterday;
+      filterEndDate = new Date(startOfToday.getTime() - 1);
+    } else if (dateFilter === "Last 7 Days") {
+      filterStartDate = startOf7DaysAgo;
+      filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+    } else if (isMonthFilter) {
+      const [year, month] = dateFilter.split("-").map(Number);
+      filterStartDate = new Date(year, month - 1, 1);
+      filterEndDate = new Date(year, month, 0, 23, 59, 59, 999);
+    } else {
+      filterStartDate = new Date(0);
+      filterEndDate = new Date();
     }
 
-    if (!window.confirm(`নির্বাচিত ${selectedOrderIds.length} টি অর্ডারের মধ্যে নতুন ${eligibleOrderIds.length} টি পার্সেল Steadfast-এ বুক করতে চান?\n(আগে থেকে বুক করাগুলো স্বয়ংক্রিয়ভাবে বাদ দেওয়া হবে)`)) return;
+    const userOrders = rawOrders.filter((o: any) => {
+      if (o.isDeleted) return false;
+      if (o.userId !== targetStaff.id && o.user?.id !== targetStaff.id) return false;
+      const orderDate = new Date(o.createdAt || o.updatedAt);
+      return orderDate >= filterStartDate && orderDate <= filterEndDate;
+    });
 
-    setIsBulkBooking(true);
-    let successCount = 0;
-    let failCount = 0;
+    let displayOrders: any[] = [];
+    let title = "";
 
+    if (type === "CREATED") {
+      displayOrders = userOrders;
+      title = `Orders Created by ${targetStaff.name}`;
+    } else if (type === "DELIVERED") {
+      displayOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('DELIVERED') || status === 'PARTIAL';
+      });
+      title = `Orders Delivered for ${targetStaff.name}`;
+    } else if (type === "RETURNED") {
+      displayOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('RETURNED') || status.includes('CANCELLED');
+      });
+      title = `Orders Returned/Cancelled for ${targetStaff.name}`;
+    }
+
+    setFilteredModalOrders(displayOrders);
+    setModalOrdersTitle(title);
+    setIsOrdersModalOpen(true);
+  };
+
+  const handleProcessPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff) return;
+    setIsProcessing(true);
     try {
       const token = localStorage.getItem("access_token");
+      const payload = {
+        userId: selectedStaff.id,
+        monthYear: dateFilter,
+        basicSalary: selectedStaff.calculatedBasicSalary,
+        commission: selectedStaff.commissionAmount,
+        bonus: Number(paymentForm.bonus) || 0,
+        deduction: Number(paymentForm.deduction) || 0,
+        totalAmount: finalPaymentAmount,
+        paymentMethod: paymentForm.method
+      };
+      const res = await fetch(`${apiUrl}/users/payroll`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ ${selectedStaff.name}-এর পেমেন্ট সফলভাবে সেভ হয়েছে!`);
+        setIsPaymentModalOpen(false);
+        setPaymentForm({ bonus: "", deduction: "", method: "Cash Handover" });
+        setIsMobileDrawerOpen(false);
+        fetchStaffAndOrders(); 
+        setActiveTab("history"); 
+        
+        if (window.innerWidth < 1024) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      } else {
+        alert(`❌ পেমেন্ট ব্যর্থ হয়েছে: ${data.message}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("সার্ভার এরর!");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBulkPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBulkProcessing(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      let successCount = 0;
+      let failCount = 0;
 
       await Promise.all(
-        eligibleOrderIds.map(async (orderId) => {
+        eligibleBulkStaff.map(async (staff) => {
           try {
-            const res = await fetch(`${apiUrl}/orders/${orderId}/book-steadfast`, {
+            const payload = {
+              userId: staff.id,
+              monthYear: dateFilter,
+              basicSalary: staff.calculatedBasicSalary,
+              commission: staff.commissionAmount,
+              bonus: 0, 
+              deduction: 0,
+              totalAmount: staff.netPayable,
+              paymentMethod: bulkPaymentMethod
+            };
+            const res = await fetch(`${apiUrl}/users/payroll`, {
               method: "POST",
-              headers: { "Authorization": `Bearer ${token}` }
+              headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
             });
-            if (res.ok) {
-              successCount++;
-            } else {
-              failCount++;
-            }
-          } catch (error) {
+            if (res.ok) successCount++;
+            else failCount++;
+          } catch (err) {
             failCount++;
           }
         })
       );
 
-      alert(`✅ বুল্ক বুকিং সম্পন্ন!\nসফল হয়েছে: ${successCount} টি\nব্যর্থ হয়েছে: ${failCount} টি`);
-      setSelectedOrderIds([]); 
-      setPage(1);
-      fetchOrders(1, searchQuery); 
+      alert(`✅ বুল্ক পেমেন্ট সম্পন্ন!\nসফল: ${successCount} জন\nব্যর্থ: ${failCount} জন`);
+      setIsBulkModalOpen(false);
+      fetchStaffAndOrders();
+      setActiveTab("history");
     } catch (error) {
-      console.error("Bulk booking error:", error);
-      alert("সার্ভার এরর! বুল্ক বুকিং সম্পন্ন করা যায়নি।");
+      alert("সার্ভার এরর! বুল্ক পেমেন্ট সম্পন্ন করা যায়নি।");
     } finally {
-      setIsBulkBooking(false);
+      setIsBulkProcessing(false);
     }
   };
 
-  const handleMarkDelivered = async (orderId: string) => {
-    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি 'Delivered' হিসেবে মার্ক করতে চান?")) return;
-    try {
-      const token = localStorage.getItem("access_token");
-      
-      const res = await fetch(`${apiUrl}/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: { 
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ status: "DELIVERED" })
-      });
-      
-      if (res.ok) {
-        alert("✅ অর্ডারটি সফলভাবে Delivered মার্ক করা হয়েছে!");
-        setSelectedOrder(null);
-        setPage(1);
-        fetchOrders(1, searchQuery); 
-      } else {
-        const errorData = await res.json();
-        console.error("Backend Error:", errorData);
-        alert(`❌ ব্যাকএন্ড এরর: ${errorData.message || "স্ট্যাটাস আপডেট করা সম্ভব হয়নি"}`);
-      }
-    } catch (error) {
-      console.error("Status update error:", error);
-      alert("সার্ভার এরর! আপডেট করা যায়নি।");
+  const getDisplayFilterName = (val: string) => {
+    if (/^\d{4}-\d{2}$/.test(val)) {
+      const [year, month] = val.split('-');
+      const date = new Date(Number(year), Number(month) - 1);
+      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
     }
+    return val;
   };
 
-  const returnStatuses = ['CANCELLED', 'RETURNED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'];
-  const visibleOrders = orders.filter(o => !o.isDeleted);
+  const isMonthFormat = /^\d{4}-\d{2}$/.test(dateFilter);
+  const currentMonthStr = getLocalMonthStr();
+  const isCurrentOrFutureMonth = isMonthFormat && dateFilter >= currentMonthStr;
+  
+  const isAlreadyPaid = isMonthFormat && payrollHistory.some(p => p.userId === selectedStaff?.id && p.monthYear === dateFilter);
 
-  // 🚀 Note: Tab counts now represent the currently LOADED orders, except "All orders" which uses DB total
-  const tabConfigs = [
-    { label: "All orders", status: "All orders", count: totalOrdersCount || visibleOrders.length, colorClass: "text-slate-700 dark:text-gray-200", borderClass: "border-slate-300 dark:border-gray-500", bgClass: "bg-white dark:bg-[#1a2421]", ringClass: "ring-slate-400" },
-    { label: "New orders", status: "PENDING", count: visibleOrders.filter(o => o.status === 'PENDING').length, colorClass: "text-teal-500 dark:text-teal-400", borderClass: "border-teal-500 dark:border-teal-400/50", bgClass: "bg-teal-50 dark:bg-teal-500/10", ringClass: "ring-teal-500" },
-    { label: "Review", status: "IN_REVIEW", count: visibleOrders.filter(o => o.status === 'IN_REVIEW').length, colorClass: "text-blue-500 dark:text-blue-400", borderClass: "border-blue-200 dark:border-blue-400/30", bgClass: "bg-blue-50 dark:bg-blue-500/10", ringClass: "ring-blue-500" },
-    { label: "Packed", status: "PACKED", count: visibleOrders.filter(o => o.status === 'PACKED').length, colorClass: "text-purple-500 dark:text-purple-400", borderClass: "border-purple-200 dark:border-purple-400/30", bgClass: "bg-purple-50 dark:bg-purple-500/10", ringClass: "ring-purple-500" },
-    { label: "Pending", status: "COURIER_PENDING", count: visibleOrders.filter(o => o.status === 'COURIER_PENDING' || o.status === 'SHIPPED' || o.status === 'IN_TRANSIT' || (returnStatuses.includes(o.status?.toUpperCase()) && !o.isRestocked)).length, colorClass: "text-orange-500 dark:text-orange-400", borderClass: "border-orange-200 dark:border-orange-400/30", bgClass: "bg-orange-50 dark:bg-orange-500/10", ringClass: "ring-orange-500" },
-    { label: "Delivered", status: "DELIVERED", count: visibleOrders.filter(o => o.status === 'DELIVERED' || o.status === 'DELIVERED_APPROVAL_PENDING').length, colorClass: "text-emerald-500 dark:text-emerald-400", borderClass: "border-emerald-200 dark:border-emerald-400/30", bgClass: "bg-emerald-50 dark:bg-emerald-500/10", ringClass: "ring-emerald-500" },
-    { label: "Cancel", status: "RETURNED_CANCELLED", count: visibleOrders.filter(o => returnStatuses.includes(o.status?.toUpperCase()) && o.isRestocked).length, colorClass: "text-red-500 dark:text-red-400", borderClass: "border-red-200 dark:border-red-400/30", bgClass: "bg-red-50 dark:bg-red-500/10", ringClass: "ring-red-500" },
-    { label: "Trash", status: "TRASH", count: orders.filter(o => o.isDeleted).length, colorClass: "text-gray-500 dark:text-gray-400", borderClass: "border-gray-200 dark:border-gray-500/30", bgClass: "bg-gray-50 dark:bg-gray-500/10", ringClass: "ring-gray-400" },
-  ];
+  const eligibleBulkStaff = staffList.filter(s => 
+    s.netPayable > 0 && 
+    !payrollHistory.some(p => p.userId === s.id && p.monthYear === dateFilter)
+  );
+  const bulkTotalAmount = eligibleBulkStaff.reduce((sum, s) => sum + s.netPayable, 0);
 
-  const filteredOrders = orders.filter(order => {
-    if (activeTab === "Trash") {
-      if (!order.isDeleted) return false;
-    } else {
-      if (order.isDeleted) return false;
-    }
-
-    let matchesTab = false;
-    const statusUpper = order.status?.toUpperCase();
-
-    if (activeTab === "All orders" || activeTab === "Trash") {
-      matchesTab = true;
-    } else if (activeTab === "Cancel") {
-      matchesTab = returnStatuses.includes(statusUpper) && order.isRestocked;
-    } else if (activeTab === "Pending") {
-      matchesTab = statusUpper === "COURIER_PENDING" || statusUpper === "SHIPPED" || statusUpper === "IN_TRANSIT" || (returnStatuses.includes(statusUpper) && !order.isRestocked);
-    } else if (activeTab === "Delivered") {
-      matchesTab = statusUpper === "DELIVERED" || statusUpper === "DELIVERED_APPROVAL_PENDING";
-    } else {
-      matchesTab = statusUpper === tabConfigs.find(t => t.label === activeTab)?.status;
-    }
-
-    // Server-side handles text search now, but we keep this as fallback for client-side tabs
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = 
-      order.orderNo.toLowerCase().includes(searchLower) ||
-      order.customer?.name.toLowerCase().includes(searchLower) ||
-      order.customer?.phone.toLowerCase().includes(searchLower) ||
-      (order.consignmentId && String(order.consignmentId).toLowerCase().includes(searchLower)) ||
-      (order.trackingCode && String(order.trackingCode).toLowerCase().includes(searchLower));
-
-    const orderDate = new Date(order.createdAt);
-    let matchesDate = true;
-    const now = new Date();
-    
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-
-    const diffTime = now.getTime() - orderDate.getTime();
-    const diffDays = diffTime / (1000 * 3600 * 24);
-
-    if (timeFilter === "TODAY") {
-      matchesDate = orderDate.toDateString() === now.toDateString();
-    } else if (timeFilter === "YESTERDAY") {
-      matchesDate = orderDate.toDateString() === yesterday.toDateString();
-    } else if (timeFilter === "7D") {
-      matchesDate = diffDays <= 7;
-    } else if (timeFilter === "30D") {
-      matchesDate = diffDays <= 30;
-    }
-
-    return matchesTab && matchesSearch && matchesDate;
-  });
-
-  const eligibleOrdersForBulk = filteredOrders.filter(o => !o.consignmentId && o.status !== 'IN_REVIEW' && !o.isDeleted);
-
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedOrderIds(eligibleOrdersForBulk.map(order => order.id));
-    } else {
-      setSelectedOrderIds([]);
-    }
-  };
-
-  const handleSelectOrder = (id: string) => {
-    if (selectedOrderIds.includes(id)) {
-      setSelectedOrderIds(selectedOrderIds.filter(orderId => orderId !== id));
-    } else {
-      setSelectedOrderIds([...selectedOrderIds, id]);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return new Date(dateString).toLocaleDateString('en-US', options).toUpperCase();
-  };
-
-  const getProductImageClassOrUrl = (item: any, isThumbnail = false) => {
-    if (item?.product?.imageUrl) {
-      return item.product.imageUrl.startsWith('http') ? item.product.imageUrl : `${apiUrl}${item.product.imageUrl}`;
-    }
-    const defaultColors = ["bg-blue-900", "bg-cyan-600", "bg-yellow-600", "bg-emerald-800", "bg-slate-700"];
-    const randomColor = defaultColors[Math.floor(Math.random() * defaultColors.length)];
-    return isThumbnail ? randomColor : `url(${randomColor})`; 
-  };
-
-  return (
-    <div className="space-y-6 max-w-[1400px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen relative overflow-hidden transition-colors">
-      
-      {/* ================= HEADER ================= */}
-      <div className="flex flex-row justify-between items-center bg-white dark:bg-[#1a2421] p-4 sm:p-6 rounded-2xl border border-gray-100 dark:border-white/5 shadow-sm gap-2 transition-colors">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight truncate">Orders Management</h1>
-          <p className="text-[10px] sm:text-sm text-slate-500 dark:text-gray-400 mt-0.5 truncate">Manage Facebook commerce workflow efficiently</p>
-        </div>
-        
-        <Link 
-          href="/dashboard/orders/create"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl flex items-center gap-1 text-xs sm:text-sm font-bold transition-colors shadow-md shrink-0 cursor-pointer"
-        >
-          <span className="text-sm sm:text-base font-black leading-none">+</span> New Order
-        </Link>
-      </div>
-
-      <div className="space-y-6">
-        {/* ================= TABS ================= */}
-        <div className="flex space-x-4 overflow-x-auto pb-2 custom-scrollbar">
-          {tabConfigs.map((tab) => {
-            const isActive = activeTab === tab.label;
-            return (
-              <button
-                key={tab.label}
-                onClick={() => setActiveTab(tab.label)}
-                className={`min-w-[140px] p-4 flex flex-col justify-between rounded-xl border transition-all text-left ${
-                  isActive 
-                    ? `${tab.bgClass} ${tab.borderClass} shadow-sm ring-1 ring-inset${tab.ringClass}` 
-                    : "bg-white dark:bg-[#1a2421] border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10"
-                }`}
-              >
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? tab.colorClass : "text-gray-500 dark:text-gray-400"}`}>
-                  {tab.label}
-                </span>
-                <span className={`text-2xl font-bold mt-2 ${isActive ? tab.colorClass : "text-slate-800 dark:text-gray-200"}`}>
-                  {isLoading && page === 1 ? "-" : tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ================= TOOLBAR ================= */}
-        <div className="bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors">
-          <div className="relative w-full xl:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search ID, Name, Phone, CN, Product..." 
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/5 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
-            />
-          </div>
-
-          <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full xl:w-auto">
-            {[
-              { id: "ALL", label: "All" },
-              { id: "30D", label: "Last 30d" },
-              { id: "7D", label: "Last 7d" },
-              { id: "YESTERDAY", label: "Yesterday" },
-              { id: "TODAY", label: "Today" },
-            ].map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => setTimeFilter(filter.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
-                  timeFilter === filter.id
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "bg-gray-50 dark:bg-[#141d1a] text-slate-600 dark:text-gray-400 border border-gray-200 dark:border-white/5 hover:text-slate-800 dark:hover:text-white"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ================= BULK ACTIONS ================= */}
-        <div className="flex items-center justify-between bg-white dark:bg-[#1a2421] p-3 rounded-xl border border-gray-200 dark:border-white/5 transition-colors">
-          <div className="flex items-center gap-3 ml-2">
-            <input
-              type="checkbox"
-              className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer"
-              checked={eligibleOrdersForBulk.length > 0 && selectedOrderIds.length === eligibleOrdersForBulk.length}
-              onChange={handleSelectAll}
-            />
-            <span className="text-sm font-bold text-slate-700 dark:text-gray-200">
-              Select All Loaded {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : ""}
+  const renderStaffDetails = () => {
+    if (!selectedStaff) return null;
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-5 sm:p-6 pt-6 sm:pt-8 text-center border-b border-gray-100 dark:border-white/10 shrink-0 bg-slate-50/50 dark:bg-white/5 relative">
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4">
+            <span className={`text-[9px] sm:text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+              selectedStaff.status !== 'Inactive' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+            }`}>
+              {selectedStaff.status || 'Active'}
             </span>
           </div>
-
-          {selectedOrderIds.length > 0 && (
-            <div className="flex items-center gap-2 animate-in fade-in duration-200">
-              <button 
-                onClick={handleBulkBookCourier}
-                disabled={isBulkBooking}
-                className="text-xs font-bold px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          <div className={`w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full ${selectedStaff.avatarBg} text-white flex items-center justify-center text-2xl sm:text-3xl font-bold shadow-md border-4 border-white dark:border-[#1a2421] mb-2 sm:mb-3`}>
+             {selectedStaff.name?.charAt(0).toUpperCase()}
+          </div>
+          <h2 className="text-lg sm:text-xl font-extrabold text-slate-800 dark:text-white">{selectedStaff.name}</h2>
+          <p className="text-[11px] sm:text-sm font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 sm:mt-1 uppercase tracking-wider">{selectedStaff.role}</p>
+        </div>
+        
+        <div className="flex-1 p-4 sm:p-6 space-y-4 sm:space-y-6">
+          <div>
+            <div className="flex justify-between items-center mb-2.5 sm:mb-3">
+              <h3 className="text-[11px] sm:text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Order Performance</h3>
+              <span className="text-[9px] sm:text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/20">
+                {getDisplayFilterName(dateFilter)}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div 
+                onClick={() => handleOpenOrdersModal("CREATED", selectedStaff)}
+                className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-2.5 sm:p-3 border border-gray-100 dark:border-white/5 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500 transition-all group"
               >
-                {isBulkBooking ? (
-                  <><Loader2 size={14} className="animate-spin" /> Booking...</>
-                ) : (
-                  <><Truck size={14} /> Book Selected ({selectedOrderIds.length})</>
-                )}
-              </button>
+                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 flex items-center gap-1 group-hover:text-gray-700 dark:group-hover:text-white transition-colors"><Package size={10}/> Created</p>
+                <p className="text-lg sm:text-xl font-black text-slate-700 dark:text-gray-200">{selectedStaff.createdCount}</p>
+                <p className="text-[8px] sm:text-[9px] text-gray-500 font-medium">({selectedStaff.createdItemsCount} Sarees)</p>
+              </div>
+              
+              <div 
+                onClick={() => handleOpenOrdersModal("DELIVERED", selectedStaff)}
+                className="bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl p-2.5 sm:p-3 border border-emerald-100 dark:border-emerald-500/20 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-400 transition-all group"
+              >
+                <p className="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1 flex items-center gap-1 group-hover:text-emerald-800 dark:group-hover:text-emerald-300 transition-colors"><Truck size={10}/> Delivered</p>
+                <p className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400">{selectedStaff.deliveredParcels}</p>
+                <p className="text-[8px] sm:text-[9px] text-emerald-600 dark:text-emerald-500 font-medium">({selectedStaff.deliveredItemsCount} Sarees)</p>
+              </div>
+
+              <div 
+                onClick={() => handleOpenOrdersModal("RETURNED", selectedStaff)}
+                className="bg-rose-50/50 dark:bg-rose-500/10 rounded-xl p-2.5 sm:p-3 border border-rose-100 dark:border-rose-500/20 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-rose-300 dark:hover:border-rose-400 transition-all group"
+              >
+                <p className="text-[9px] sm:text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase mb-1 flex items-center gap-1 group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors"><RotateCcw size={10}/> Returned</p>
+                <p className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-400">{selectedStaff.returnedCount}</p>
+                <p className="text-[8px] sm:text-[9px] text-rose-600 dark:text-rose-500 font-medium">({selectedStaff.returnedItemsCount} Sarees)</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] sm:text-[12px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5 sm:mb-3">Salary & Commissions</h3>
+            <div className="border border-gray-200 dark:border-white/10 rounded-xl p-3.5 sm:p-5 space-y-3 sm:space-y-4 bg-white dark:bg-transparent">
+              <div className="flex justify-between items-center pb-2.5 sm:pb-3 border-b border-gray-100 dark:border-white/10">
+                <div className="flex flex-col">
+                  <span className="text-[11px] sm:text-[13px] font-medium text-gray-500 dark:text-gray-400">Basic Salary</span>
+                  {selectedStaff.salaryNote && <span className="text-[8px] sm:text-[10px] text-amber-500 dark:text-amber-400 font-medium mt-0.5">{selectedStaff.salaryNote}</span>}
+                </div>
+                <span className="text-[13px] sm:text-base font-bold text-slate-800 dark:text-white">৳ {selectedStaff.calculatedBasicSalary.toLocaleString()}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pb-2.5 sm:pb-3 border-b border-gray-100 dark:border-white/10">
+                <div className="flex flex-col">
+                  <span className="text-[11px] sm:text-[13px] font-medium text-gray-500 dark:text-gray-400">Commission Earned</span>
+                  <span className="text-[8px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5">
+                    (৳{selectedStaff.commissionRate}/pc × {selectedStaff.deliveredItemsCount} dlvd)
+                  </span>
+                </div>
+                <span className="text-[13px] sm:text-base font-bold text-indigo-600 dark:text-indigo-400">+ ৳ {selectedStaff.commissionAmount.toLocaleString()}</span>
+              </div>
+              
+              <div className="flex justify-between items-center pt-1.5 sm:pt-2">
+                <span className="text-[13px] sm:text-[14px] font-black text-slate-800 dark:text-white">Net Payable</span>
+                <span className="text-lg sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">৳ {selectedStaff.netPayable.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a2421] transition-colors shrink-0 rounded-b-2xl mt-auto">
+          {!isMonthFormat ? (
+            <button disabled className="w-full bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500 py-3 sm:py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed text-xs sm:text-sm">
+              <CalendarDays size={16} className="sm:w-[18px] sm:h-[18px]" /> Select a specific month to pay
+            </button>
+          ) : isCurrentOrFutureMonth ? (
+            <button disabled className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-500 py-3 sm:py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed shadow-sm text-xs sm:text-sm">
+              <Clock size={16} className="sm:w-[18px] sm:h-[18px]" /> Month Not Completed Yet
+            </button>
+          ) : isAlreadyPaid ? (
+            <button disabled className="w-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-500 py-3 sm:py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 cursor-not-allowed shadow-sm text-xs sm:text-sm">
+              <CheckCircle2 size={16} className="sm:w-[18px] sm:h-[18px]" /> Already Paid for {getDisplayFilterName(dateFilter)}
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIsPaymentModalOpen(true)}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 sm:py-3.5 rounded-xl font-bold shadow-md transition-colors flex justify-center items-center gap-2 text-xs sm:text-sm"
+            >
+              <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" /> Process Payment for {getDisplayFilterName(dateFilter)}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] gap-3">
+        <Loader2 className="animate-spin text-indigo-500" size={40} />
+        <p className="text-slate-500 font-medium text-sm">লোডিং পেরোল ও সেলস ডেটা...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[1500px] mx-auto pb-10 bg-[#f8f9fc] dark:bg-[#0f1714] min-h-screen p-4 sm:p-6 font-sans transition-colors duration-300 relative">
+      
+      {/* ================= HEADER ================= */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 sm:mb-6 gap-3 sm:gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <Wallet className="text-indigo-500" size={22} /> Staff Payroll
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage salaries, commissions, and process payments.</p>
+        </div>
+        
+        <div className="w-full sm:w-auto">
+          <button 
+            onClick={() => setIsBulkModalOpen(true)}
+            disabled={!isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0}
+            className={`flex w-full justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-colors ${
+              !isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0
+              ? "bg-gray-200 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-none"
+              : "bg-indigo-600 hover:bg-indigo-700 text-white"
+            }`}
+          >
+            <Layers size={16} className="sm:w-[18px] sm:h-[18px]" /> 
+            {!isMonthFormat 
+              ? "Process Bulk Pay" 
+              : isCurrentOrFutureMonth 
+                ? "Month Not Ended" 
+                : eligibleBulkStaff.length === 0 
+                  ? "All Paid" 
+                  : `Pay ${eligibleBulkStaff.length} Staff`
+            }
+          </button>
+        </div>
+      </div>
+
+      {/* ================= KPI CARDS ================= */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-5 sm:mb-6">
+        {[
+          { label: "Total Staff", value: totalStaff, icon: <Briefcase size={16} className="sm:w-[20px] sm:h-[20px]"/>, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
+          { label: "Active Staff", value: activeStaff, icon: <CheckCircle2 size={16} className="sm:w-[20px] sm:h-[20px]"/>, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+          { label: "Calculated Payroll", value: `৳ ${totalPayroll.toLocaleString()}`, icon: <DollarSign size={16} className="sm:w-[20px] sm:h-[20px]"/>, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
+          { label: "Pending Payments", value: `৳ ${totalPending.toLocaleString()}`, icon: <CreditCard size={16} className="sm:w-[20px] sm:h-[20px]"/>, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10" },
+        ].map((kpi, idx) => (
+          <div key={idx} className="bg-white dark:bg-[#1a2421] p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-0">
+            <div className="order-2 sm:order-1">
+              <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">{kpi.label}</p>
+              <h3 className={`text-lg sm:text-xl font-bold ${kpi.color} truncate`}>{kpi.value}</h3>
+            </div>
+            <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center order-1 sm:order-2 shrink-0 ${kpi.bg} ${kpi.color}`}>
+              {kpi.icon}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ================= MAIN CONTENT GRID ================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+        
+        {/* ================= LEFT COLUMN ================= */}
+        <div className="lg:col-span-7 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex flex-col transition-colors h-auto overflow-visible">
+          
+          <div className="p-4 sm:p-5 shrink-0 space-y-3 sm:space-y-4 border-b border-gray-100 dark:border-white/5">
+            <div className="flex flex-col gap-3">
+              <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm w-full">
+                <button 
+                  onClick={() => setActiveTab("directory")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-md text-[13px] sm:text-sm font-bold transition-all ${
+                    activeTab === "directory" ? "text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#1a2421] shadow-sm border border-gray-200 dark:border-white/10" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <Users size={16} className="sm:w-[18px] sm:h-[18px]"/> Salary Roster
+                </button>
+                <button 
+                  onClick={() => setActiveTab("history")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-md text-[13px] sm:text-sm font-bold transition-all ${
+                    activeTab === "history" ? "text-emerald-600 dark:text-emerald-400 bg-white dark:bg-[#1a2421] shadow-sm border border-gray-200 dark:border-white/10" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <FileText size={16} className="sm:w-[18px] sm:h-[18px]"/> Payment History
+                </button>
+              </div>
+
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={activeTab === "directory" ? "Search staff by name or role..." : "Search payroll by ID or Employee..."}
+                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              
+              {activeTab === "directory" && (
+                <div className="flex bg-slate-50 dark:bg-[#141d1a] p-1.5 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm items-center overflow-x-auto custom-scrollbar w-full">
+                  <div className="pl-2 pr-1 text-gray-400 hidden sm:block">
+                    <CalendarDays size={16} />
+                  </div>
+                  
+                  {quickFilters.map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setDateFilter(filter)}
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-[13px] rounded-md transition-all duration-200 whitespace-nowrap font-bold ${
+                        dateFilter === filter 
+                          ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-white/10" 
+                          : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-300 hover:bg-white/50 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+
+                  <div className="w-px h-5 bg-gray-300 dark:bg-white/20 mx-1.5 sm:mx-2 shrink-0"></div>
+
+                  <input 
+                    type="month" 
+                    value={isMonthFormat ? dateFilter : ""}
+                    onChange={(e) => {
+                      if(e.target.value) setDateFilter(e.target.value);
+                    }}
+                    title="Select any Month"
+                    className={`flex-1 min-w-[120px] px-2 py-1.5 sm:py-2 mx-0.5 sm:mx-1 text-[11px] sm:text-[13px] font-bold rounded-md outline-none transition-colors cursor-pointer border shrink-0 ${
+                      isMonthFormat 
+                        ? "bg-white dark:bg-[#1a2421] text-indigo-600 dark:text-indigo-400 shadow-sm border-gray-200 dark:border-white/10" 
+                        : "bg-transparent text-slate-500 dark:text-gray-400 border-transparent hover:text-slate-700 dark:hover:text-gray-300 hover:bg-white/50 dark:hover:bg-white/5"
+                    }`}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-5 space-y-2.5 sm:space-y-3 bg-slate-50/50 dark:bg-transparent rounded-b-2xl h-auto">
+            {activeTab === "directory" 
+              ? filteredStaff.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-xs sm:text-sm">No staff found for this period.</div>
+                ) : filteredStaff.map((staff) => {
+                  const isSelected = selectedStaff?.id === staff.id;
+                  return (
+                    <div 
+                      key={staff.id} 
+                      onClick={() => handleItemClick(staff)}
+                      className={`flex flex-col p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        isSelected ? "border-indigo-500 dark:border-indigo-500/60 bg-indigo-50/50 dark:bg-indigo-500/10 shadow-sm" : "border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] hover:border-gray-200 dark:hover:border-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${staff.avatarBg} text-white flex items-center justify-center text-base sm:text-lg font-bold shadow-sm shrink-0`}>
+                            {staff.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className={`text-[13px] sm:text-[15px] font-bold ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-white'}`}>{staff.name}</h3>
+                            <p className="text-[10px] sm:text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">{staff.role}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[14px] sm:text-[15px] font-black text-indigo-600 dark:text-indigo-400">৳ {staff.netPayable.toLocaleString()}</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                            staff.status !== 'Inactive' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                          }`}>
+                            {staff.status || 'Active'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 sm:gap-2 text-center border-t border-gray-100 dark:border-white/10 pt-2.5 sm:pt-3 text-[9px] sm:text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                        <div className="bg-slate-50 dark:bg-white/5 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-slate-200 dark:hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("CREATED", staff); }}>
+                          <span className="leading-tight">Created</span> 
+                          <b className="text-slate-700 dark:text-gray-200 text-[11px] sm:text-[13px] leading-tight">{staff.createdCount}</b>
+                          <span className="text-[8px] text-slate-500 dark:text-gray-400 font-bold leading-tight mt-0.5">({staff.createdItemsCount} pcs)</span>
+                        </div>
+                        <div className="bg-emerald-50 dark:bg-emerald-500/10 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("DELIVERED", staff); }}>
+                          <span className="leading-tight">Delivered</span> 
+                          <b className="text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-[13px] leading-tight">{staff.deliveredParcels}</b>
+                          <span className="text-[8px] text-emerald-500 dark:text-emerald-400 font-bold leading-tight mt-0.5">({staff.deliveredItemsCount} pcs)</span>
+                        </div>
+                        <div className="bg-rose-50 dark:bg-rose-500/10 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-rose-200 dark:hover:bg-rose-500/20 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("RETURNED", staff); }}>
+                          <span className="leading-tight">Returned</span> 
+                          <b className="text-rose-600 dark:text-rose-400 text-[11px] sm:text-[13px] leading-tight">{staff.returnedCount}</b>
+                          <span className="text-[8px] text-rose-500 dark:text-rose-400 font-bold leading-tight mt-0.5">({staff.returnedItemsCount} pcs)</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              : filteredHistory.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-xs sm:text-sm">No payment history found.</div>
+                ) : filteredHistory.map((history, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex flex-col p-3 sm:p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] hover:border-gray-200 dark:hover:border-white/10 transition-all gap-2.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center border border-emerald-100 dark:border-emerald-500/20 shrink-0">
+                          <CheckCircle2 size={14} className="sm:w-[16px] sm:h-[16px]" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <h3 className="text-[12px] sm:text-[14px] font-bold text-slate-800 dark:text-white">
+                              {history.id.length > 10 ? `PAY-${history.id.substring(0,6).toUpperCase()}` : history.id}
+                            </h3>
+                            <span className="text-[8px] sm:text-[9px] font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase">{history.paymentMethod || history.method}</span>
+                          </div>
+                          <p className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Paid to <span className="font-bold text-slate-700 dark:text-gray-300">{history.user?.name || history.empName}</span></p>
+                        </div>
+                      </div>
+                      <h4 className="text-[13px] sm:text-[15px] font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">৳ {(history.totalAmount || history.total).toLocaleString()}</h4>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 pt-2 text-[9px] sm:text-[10px]">
+                       <span className="text-gray-400">{new Date(history.createdAt || history.date).toLocaleDateString()}</span>
+                       <span className="font-bold px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-gray-400 rounded">
+                         For: {getDisplayFilterName(history.monthYear)}
+                       </span>
+                    </div>
+                  </div>
+                ))
+            }
+          </div>
+        </div>
+
+        {/* ================= RIGHT COLUMN (DESKTOP) ================= */}
+        <div id="details-section" className="hidden lg:flex lg:col-span-5 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex-col relative transition-colors h-max lg:sticky lg:top-6">
+          {activeTab === "directory" ? (
+            selectedStaff ? renderStaffDetails() : (
+              <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-slate-400 dark:text-gray-500 min-h-[300px]">
+                <Users size={40} className="opacity-50 mb-3" />
+                <p>Select a staff member to view details</p>
+              </div>
+            )
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center min-h-[300px]">
+               <div className="w-20 h-20 bg-gray-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-5">
+                  <FileText size={32} className="text-gray-300 dark:text-gray-600" />
+               </div>
+               <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Payroll History Selected</h2>
+               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
+                 Select an employee from the Salary Roster tab to view their detailed information and process new payments.
+               </p>
             </div>
           )}
         </div>
+      </div>
 
-        {/* ================= ORDER CARDS GRID ================= */}
-        {isLoading && page === 1 ? (
-           <div className="flex justify-center items-center py-20">
-             <Loader2 className="animate-spin text-emerald-600" size={40} />
-           </div>
-        ) : filteredOrders.length === 0 ? (
-           <div className="text-center py-16 text-slate-500 dark:text-gray-400">
-             No orders found for the selected filter or search.
-           </div>
-        ) : (
-          <div className="space-y-6">
-            <div className={`grid gap-5 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"}`}>
-              {filteredOrders.map((order) => {
-                const orderItemsCount = order.items?.reduce((acc: number, curr: any) => acc + curr.quantity, 0) || 0;
-                const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
-                
-                let imageRender;
-                const imageSource = getProductImageClassOrUrl(firstItem, true);
-                
-                if (imageSource && imageSource.startsWith('http')) {
-                   imageRender = <img src={imageSource} alt="Thumbnail" className="w-full h-full object-cover" />;
-                } else {
-                   imageRender = <div className={`w-full h-full ${imageSource || 'bg-gray-200 dark:bg-gray-700'}`}></div>;
-                }
-
-                const dueAmount = Math.max(0, order.totalAmount - (order.advance || 0));
-                const isAlreadyBooked = !!order.consignmentId || order.status === 'IN_REVIEW';
-                const isModifiable = ['PENDING', 'IN_REVIEW'].includes(order.status?.toUpperCase());
-
-                return (
-                  <div key={order.id} className={`bg-white dark:bg-[#1a2421] rounded-xl border flex flex-col hover:shadow-md dark:hover:shadow-none dark:hover:border-white/10 transition-all ${order.isDeleted ? 'opacity-75 grayscale-[20%]' : ''} ${selectedOrderIds.includes(order.id) ? 'border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/50' : 'border-gray-200 dark:border-white/5'}`}>
+      {/* ================= 🚀 ORDER LIST MODAL (NEW) ================= */}
+      {isOrdersModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-4xl rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a] shrink-0">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Package size={18} className="text-indigo-500"/> {modalOrdersTitle}
+                </h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">Showing {filteredModalOrders.length} orders</p>
+              </div>
+              <button onClick={() => setIsOrdersModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors p-1">
+                <X size={20} className="sm:w-[24px] sm:h-[24px]"/>
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30 dark:bg-transparent p-4 sm:p-5">
+              {filteredModalOrders.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  {filteredModalOrders.map((order, idx) => {
+                    const status = order.status?.toUpperCase() || 'PENDING';
+                    const isDelivered = ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(status);
+                    const isReturned = ['RETURNED', 'CANCELLED'].includes(status);
                     
-                    {/* Card Header */}
-                    <div className="p-4 border-b border-gray-50 dark:border-white/5">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-start gap-3">
-                          <input 
-                            type="checkbox" 
-                            className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-600 dark:bg-[#141d1a] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
-                            checked={selectedOrderIds.includes(order.id)}
-                            onChange={() => handleSelectOrder(order.id)}
-                            disabled={isAlreadyBooked} 
-                            title={isAlreadyBooked ? "Already Booked" : "Select Order"}
-                          />
+                    // 🚀 FIXED: We are now strictly using orderNo directly just like in your main OrdersPage!
+                    const rawInternalId = order.orderNo || (order.id || '').substring(0, 8).toUpperCase();
+                    const finalOrderId = String(rawInternalId).startsWith('#') ? rawInternalId : `#${rawInternalId}`;
+                    
+                    const cnNumber = order.consignmentId || null;
+
+                    return (
+                      <div key={idx} className="bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 p-3 sm:p-4 rounded-xl shadow-sm hover:border-indigo-300 transition-colors group">
+                        <div className="flex justify-between items-start mb-2 border-b border-gray-100 dark:border-white/5 pb-2">
                           <div>
-                            <h3 className="text-[15px] font-bold text-slate-800 dark:text-white">{order.orderNo}</h3>
+                            <div 
+                              onClick={() => {
+                                navigator.clipboard.writeText(finalOrderId);
+                                alert(`Copied: ${finalOrderId}`);
+                              }}
+                              title="Click to Copy ID"
+                              className="text-[13px] sm:text-[14px] font-black text-slate-800 dark:text-white cursor-pointer hover:text-indigo-500 transition-colors flex items-center gap-1.5 w-fit"
+                            >
+                              {finalOrderId}
+                              <Copy size={12} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+                            </div>
                             
-                            {order.consignmentId && (
-                              <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
-                                <Box size={10} /> CN: {order.consignmentId}
-                              </p>
+                            {cnNumber && (
+                              <div 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(cnNumber);
+                                  alert(`Copied CN: ${cnNumber}`);
+                                }}
+                                title="Click to Copy CN"
+                                className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-500 cursor-pointer hover:text-blue-700 transition-colors flex items-center gap-1 w-fit mt-0.5"
+                              >
+                                <Package size={11} />
+                                <span>CN: {cnNumber}</span>
+                                <Copy size={10} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+                              </div>
                             )}
 
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase mt-0.5">{formatDate(order.createdAt)}</p>
-                            
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
-                              <User size={10}/> Entry by: <span className="font-bold text-slate-600 dark:text-gray-300">{order.user?.name || "Admin"}</span>
+                            <p className="text-[9px] text-gray-400 font-medium mt-1.5">
+                              {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} • {new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                             isDelivered ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20' :
+                             isReturned ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20' :
+                             'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20'
+                          }`}>
+                            {status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 flex items-center gap-1">
+                              <User size={10} className="text-gray-400"/> {order.customer?.name || 'Unknown'}
+                            </p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{order.customer?.phone || 'No phone'}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white">৳ {(order.totalAmount || 0).toLocaleString()}</p>
+                            <p className="text-[9px] font-bold text-gray-500">
+                              {order.items?.reduce((s:number, i:any) => s + (Number(i.quantity) || 0), 0) || 0} Items
                             </p>
                           </div>
                         </div>
-                        
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-[9px] font-bold px-2 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded uppercase tracking-wider bg-teal-50/50 dark:bg-teal-500/10">
-                            {order.status === 'PENDING' ? 'NEW ORDERS' : order.status === 'IN_REVIEW' ? 'IN REVIEW' : order.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : order.status === 'SHIPPED' || order.status === 'IN_TRANSIT' ? 'PENDING' : order.status}
-                          </span>
-                          {order.isRestocked && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10" title="This order has been restocked to inventory">
-                              <CheckCircle2 size={10} /> RESTOCKED
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-4 flex justify-between items-start">
-                      <div>
-                        <h4 className="text-[14px] font-bold text-slate-800 dark:text-gray-100">{order.customer?.name}</h4>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{order.customer?.phone}</p>
-                      </div>
-                      
-                      <div className="text-right flex flex-col items-end gap-1.5">
-                        <span className="text-[12px] font-bold text-slate-400 dark:text-gray-500">
-                          Total: ৳ {order.totalAmount}
-                        </span>
-                        <span className="text-[14px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-500/20 shadow-sm">
-                          COD: ৳ {dueAmount}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Product Thumbnail Row */}
-                    <div className="mx-4 mb-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-lg p-2 flex justify-between items-center transition-colors">
-                      <div className="w-8 h-8 rounded shadow-sm border border-black/10 dark:border-white/10 overflow-hidden">
-                         {imageRender}
-                      </div>
-                      <span className="text-[11px] text-slate-500 dark:text-gray-400 font-medium">{orderItemsCount} Items</span>
-                    </div>
-
-                    {/* Card Footer */}
-                    <div className="p-4 pt-2 mt-auto border-t border-gray-100 dark:border-white/5 flex justify-between items-center">
-                      <button 
-                        onClick={() => setSelectedOrder(order)}
-                        className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-gray-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                      >
-                        <Eye size={14} /> View Details
-                      </button>
-                      <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
-                        {!order.isDeleted ? (
-                          <>
-                            {isModifiable && (
-                              <>
-                                <Link href={`/dashboard/orders/${order.id}/edit`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Edit Order">
-                                  <Edit3 size={15} />
-                                </Link>
-                                <button onClick={() => handleDeleteOrder(order.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer" title="Move to Trash">
-                                  <Trash2 size={15} />
-                                </button>
-                                <button 
-                                  onClick={() => handleBookCourier(order.id)} 
-                                  disabled={bookingOrderId === order.id || isAlreadyBooked} 
-                                  className={`transition-colors ${bookingOrderId === order.id || isAlreadyBooked ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'hover:text-emerald-600 dark:hover:text-emerald-400'}`} 
-                                  title={isAlreadyBooked ? "Already Booked" : "Book to Steadfast"}
-                                >
-                                  {bookingOrderId === order.id ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
-                                </button>
-                              </>
-                            )}
-                            <Link href={`/dashboard/orders/${order.id}/invoice`} target="_blank" className="hover:text-slate-700 dark:hover:text-gray-300 transition-colors" title="Print Invoice">
-                              <Printer size={15} />
-                            </Link>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => handleRestoreOrder(order.id)} className="text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer" title="Restore Order">
-                              <RotateCcw size={16} />
-                            </button>
-                            <button onClick={() => handlePermanentDelete(order.id)} className="text-red-600 hover:text-red-700 transition-colors cursor-pointer" title="Permanent Delete">
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* 🚀 LOAD MORE BUTTON */}
-            {hasMore && (
-              <div className="flex justify-center mt-8 pb-4">
-                <button
-                  onClick={() => {
-                    const nextPage = page + 1;
-                    setPage(nextPage);
-                    fetchOrders(nextPage, searchQuery);
-                  }}
-                  disabled={isFetchingMore}
-                  className="bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-6 py-2.5 rounded-full font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
-                >
-                  {isFetchingMore ? (
-                    <><Loader2 size={16} className="animate-spin" /> Loading...</>
-                  ) : (
-                    "Load More Orders"
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ================= RIGHT DRAWER ================= */}
-      {selectedOrder && mounted && createPortal(
-        <>
-          <div 
-            className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[99998] transition-opacity"
-            onClick={() => setSelectedOrder(null)}
-          />
-          
-          <div className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-[#1a2421] shadow-2xl z-[99999] flex flex-col transform transition-transform duration-300">
-            
-            {/* Drawer Header */}
-            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start bg-slate-50 dark:bg-[#141d1a]">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 dark:text-white">Order {selectedOrder.orderNo}</h2>
-                
-                {selectedOrder.consignmentId && (
-                  <p className="text-[13px] font-bold text-indigo-600 dark:text-indigo-400 mt-1 flex items-center gap-1.5">
-                    <Box size={14} /> CN: {selectedOrder.consignmentId}
-                  </p>
-                )}
-
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(selectedOrder.createdAt)}</p>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1"><User size={12}/> Entry by: <span className="font-bold text-slate-700 dark:text-gray-300">{selectedOrder.user?.name || "Admin"}</span></p>
-              </div>
-              <div className="flex flex-col items-end gap-2.5">
-                <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"><X size={20} /></button>
-                
-                <div className="flex flex-col items-end gap-1.5 mt-1">
-                  <span className="text-[10px] font-bold px-3 py-1 border border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400 rounded-full uppercase bg-white dark:bg-teal-500/10 shadow-sm">
-                    {selectedOrder.status === 'PENDING' ? 'NEW ORDERS' : selectedOrder.status === 'IN_REVIEW' ? 'IN REVIEW' : selectedOrder.status === 'DELIVERED_APPROVAL_PENDING' ? 'DELIVERED (PENDING)' : selectedOrder.status}
-                  </span>
-                  {selectedOrder.isRestocked && (
-                    <span className="text-[9px] font-bold px-2 py-1 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-full uppercase bg-emerald-50 dark:bg-emerald-500/10 shadow-sm flex items-center gap-1">
-                      <CheckCircle2 size={10} /> RESTOCKED
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              
-              {/* Customer Info */}
-              <div>
-                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">CUSTOMER INFORMATION</h3>
-                <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-white/5 space-y-3">
-                  <h4 className="text-[14px] font-bold text-slate-800 dark:text-gray-100">{selectedOrder.customer?.name}</h4>
-                  <div className="flex justify-between text-[13px] border-b border-gray-200 dark:border-white/5 pb-2"><span className="text-gray-500 dark:text-gray-400">Phone:</span><span className="font-medium text-slate-800 dark:text-gray-200">{selectedOrder.customer?.phone}</span></div>
-                  <div className="flex justify-between text-[13px] border-b border-gray-200 dark:border-white/5 pb-2"><span className="text-gray-500 dark:text-gray-400">District:</span><span className="font-medium text-slate-800 dark:text-gray-200">{selectedOrder.customer?.district || 'N/A'}</span></div>
-                  <div className="text-[13px]"><span className="text-gray-500 dark:text-gray-400 block mb-1">Full Address:</span><span className="font-medium text-slate-800 dark:text-gray-200 leading-relaxed">{selectedOrder.customer?.address || 'N/A'}</span></div>
-                </div>
-              </div>
-
-              {/* Products */}
-              <div>
-                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">PRODUCTS ({selectedOrder.items?.length || 0})</h3>
-                <div className="space-y-3">
-                  {selectedOrder.items?.map((item: any, idx: number) => {
-                    const imageSource = getProductImageClassOrUrl(item, true);
-                    let itemImageRender;
-                    if (imageSource && imageSource.startsWith('http')) {
-                       itemImageRender = <img src={imageSource} alt="img" className="w-full h-full object-cover" />;
-                    } else {
-                       itemImageRender = <div className={`w-full h-full ${imageSource || 'bg-gray-200 dark:bg-gray-700'}`}></div>;
-                    }
-
-                    return (
-                      <div key={idx} className="flex justify-between items-center border border-gray-100 dark:border-white/5 bg-white dark:bg-[#141d1a] p-3 rounded-xl transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center overflow-hidden shadow-sm border border-black/10 dark:border-white/10`}>
-                              {itemImageRender}
-                          </div>
-                          <div>
-                            <h4 className="text-[13px] font-bold text-slate-800 dark:text-gray-100">{item.product?.name || 'Unknown Product'}</h4>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Qty: {item.quantity}</p>
-                          </div>
-                        </div>
-                        <span className="text-[14px] font-bold text-emerald-700 dark:text-emerald-400">৳ {item.price * item.quantity}</span>
                       </div>
                     )
                   })}
                 </div>
-              </div>
-
-              {/* Payment Summary */}
-              <div>
-                <h3 className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">PAYMENT SUMMARY</h3>
-                <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-white/5 space-y-3 text-[13px]">
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Subtotal:</span><span className="font-medium text-slate-800 dark:text-gray-200">৳ {selectedOrder.totalAmount - selectedOrder.deliveryCharge + selectedOrder.discount}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Delivery Charge:</span><span className="font-medium text-slate-800 dark:text-gray-200">+ ৳ {selectedOrder.deliveryCharge}</span></div>
-                  <div className="flex justify-between"><span className="text-blue-500 dark:text-blue-400">Discount:</span><span className="font-medium text-blue-500 dark:text-blue-400">- ৳ {selectedOrder.discount}</span></div>
-                  {selectedOrder.advance > 0 && (
-                    <div className="flex justify-between"><span className="text-emerald-600 dark:text-emerald-400">Advance Paid:</span><span className="font-medium text-emerald-600 dark:text-emerald-400">- ৳ {selectedOrder.advance}</span></div>
-                  )}
-                  <div className="flex justify-between pt-3 border-t border-gray-200 dark:border-white/10 mt-2">
-                    <span className="font-bold text-emerald-700 dark:text-emerald-500 text-[14px]">Cash on Delivery (Due):</span>
-                    <span className="font-bold text-emerald-700 dark:text-emerald-400 text-[15px]">৳ {Math.max(0, selectedOrder.totalAmount - selectedOrder.advance)}</span>
-                  </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Package size={40} className="opacity-20 mb-3" />
+                  <p className="text-sm font-medium">এই ক্যাটাগরিতে কোনো অর্ডার পাওয়া যায়নি।</p>
                 </div>
-              </div>
+              )}
             </div>
-
-            {/* Drawer Footer Buttons */}
-            {(() => {
-              const isSelectedModifiable = ['PENDING', 'IN_REVIEW'].includes(selectedOrder.status?.toUpperCase());
-              
-              return (
-                <div className={`p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1a2421] grid ${!selectedOrder.isDeleted && !isSelectedModifiable ? 'grid-cols-1' : 'grid-cols-2'} gap-3 transition-colors`}>
-                  {!selectedOrder.isDeleted ? (
-                    <>
-                      {isSelectedModifiable && (
-                        <>
-                          <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                            <Trash2 size={14}/> Move to Trash
-                          </button>
-                          
-                          <button 
-                            onClick={() => handleMarkDelivered(selectedOrder.id)}
-                            className="py-2.5 rounded-lg border border-emerald-500/50 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
-                          >
-                            Mark Delivered
-                          </button>
-                        </>
-                      )}
-
-                      <Link 
-                        href={`/dashboard/orders/${selectedOrder.id}/invoice`} 
-                        target="_blank"
-                        className="py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                      >
-                        <Printer size={14}/> Print Slip
-                      </Link>
-                      
-                      {isSelectedModifiable && (
-                        <button 
-                          onClick={() => handleBookCourier(selectedOrder.id)}
-                          disabled={bookingOrderId === selectedOrder.id || !!selectedOrder.consignmentId} 
-                          className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {bookingOrderId === selectedOrder.id ? (
-                            <><Loader2 size={14} className="animate-spin" /> Booking...</>
-                          ) : !!selectedOrder.consignmentId ? (
-                            "Already Booked"
-                          ) : (
-                            <><Truck size={14}/> Book Courier</>
-                          )}
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => handlePermanentDelete(selectedOrder.id)} className="py-2.5 rounded-lg border border-red-500/50 dark:border-red-500/30 text-red-600 dark:text-red-400 font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                        <Trash2 size={16}/> Delete Forever
-                      </button>
-                      <button onClick={() => handleRestoreOrder(selectedOrder.id)} className="py-2.5 rounded-lg bg-emerald-600 text-white font-bold text-[12px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm">
-                        <RotateCcw size={16}/> Restore Order
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
           </div>
-        </>,
-        document.body
+        </div>
+      )}
+
+      {/* ================= 🚀 MOBILE DRAWER FOR STAFF DETAILS ================= */}
+      {isMobileDrawerOpen && selectedStaff && activeTab === "directory" && (
+        <div className="lg:hidden fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+          <div className="bg-white dark:bg-[#1a2421] w-full h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 relative">
+            <button 
+              onClick={() => setIsMobileDrawerOpen(false)} 
+              className="absolute top-4 right-4 z-20 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition-colors"
+            >
+              <X size={18} className="text-slate-700 dark:text-white" />
+            </button>
+            <div className="overflow-y-auto custom-scrollbar flex-1">
+              {renderStaffDetails()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= INDIVIDUAL PAYMENT MODAL ================= */}
+      {isPaymentModalOpen && selectedStaff && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Landmark size={18} className="text-indigo-500 sm:w-[20px] sm:h-[20px]"/> Process Payment <span className="hidden sm:inline">for {getDisplayFilterName(dateFilter)}</span>
+              </h2>
+              <button onClick={() => setIsPaymentModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors p-1">
+                <X size={18} className="sm:w-[20px] sm:h-[20px]"/>
+              </button>
+            </div>
+            
+            <form onSubmit={handleProcessPayment} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              
+              <div className="flex items-center gap-3 sm:gap-4 bg-indigo-50 dark:bg-indigo-500/10 p-3 sm:p-4 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${selectedStaff.avatarBg} text-white flex items-center justify-center text-base sm:text-lg font-bold shadow-sm shrink-0`}>
+                  {selectedStaff.name?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-[14px] sm:text-[16px] font-bold text-slate-800 dark:text-white">{selectedStaff.name}</h3>
+                  <p className="text-[10px] sm:text-[12px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 uppercase tracking-wider">{selectedStaff.role}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <label className="text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Add Bonus (৳)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    placeholder="e.g. 1000" 
+                    value={paymentForm.bonus}
+                    onChange={(e) => setPaymentForm({...paymentForm, bonus: e.target.value})}
+                    className="w-full mt-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-bold placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Deduction (৳)</label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    placeholder="e.g. 500" 
+                    value={paymentForm.deduction}
+                    onChange={(e) => setPaymentForm({...paymentForm, deduction: e.target.value})}
+                    className="w-full mt-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-rose-600 dark:text-rose-400 font-bold placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Payment Method *</label>
+                <select 
+                  required
+                  value={paymentForm.method}
+                  onChange={(e) => setPaymentForm({...paymentForm, method: e.target.value})}
+                  className="w-full mt-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 appearance-none transition-colors"
+                >
+                  <option value="Cash Handover">Cash Handover</option>
+                  <option value="bKash">bKash</option>
+                  <option value="Nagad">Nagad</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#141d1a] p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-white/10 text-center">
+                <p className="text-[10px] sm:text-[12px] font-bold text-slate-500 dark:text-gray-400 mb-1 uppercase tracking-widest">Total Amount to Pay</p>
+                <h2 className="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400">৳ {finalPaymentAmount.toLocaleString()}</h2>
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-1 sm:mt-2">
+                  (Base Pay: ৳{selectedStaff.calculatedBasicSalary} {Number(paymentForm.bonus) > 0 ? `+ Bonus: ৳${paymentForm.bonus}` : ""} {Number(paymentForm.deduction) > 0 ? `- Ded: ৳${paymentForm.deduction}` : ""})
+                </p>
+              </div>
+
+              <div className="flex gap-2.5 sm:gap-3 pt-1 sm:pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-gray-200 font-bold py-2.5 sm:py-3 rounded-xl transition-colors text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isProcessing} 
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 sm:py-3 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-1.5 sm:gap-2 disabled:opacity-70 text-xs sm:text-sm"
+                >
+                  {isProcessing ? <Loader2 size={14} className="animate-spin sm:w-[16px] sm:h-[16px]" /> : <Receipt size={14} className="sm:w-[16px] sm:h-[16px]" />} 
+                  {isProcessing ? "Processing..." : "Confirm & Pay"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= BULK PAYMENT MODAL ================= */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-lg rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-200">
+            
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a]">
+              <h2 className="text-[15px] sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-1.5 sm:gap-2">
+                <Layers size={16} className="text-indigo-500 sm:w-[20px] sm:h-[20px]"/> Process Bulk Payment
+              </h2>
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-rose-50 transition-colors p-1">
+                <X size={18} className="sm:w-[20px] sm:h-[20px]"/>
+              </button>
+            </div>
+            
+            <form onSubmit={handleBulkPayment} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              
+              <div className="text-center space-y-1.5 sm:space-y-2">
+                <p className="text-[11px] sm:text-sm text-gray-500 dark:text-gray-400">You are about to process salary for <strong className="text-slate-800 dark:text-white">{eligibleBulkStaff.length} employees</strong> for <strong className="text-indigo-600 dark:text-indigo-400">{getDisplayFilterName(dateFilter)}</strong>.</p>
+                <h2 className="text-3xl sm:text-4xl font-black text-indigo-600 dark:text-indigo-400 py-1 sm:py-3">৳ {bulkTotalAmount.toLocaleString()}</h2>
+              </div>
+
+              <div>
+                <label className="text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Default Payment Method *</label>
+                <select 
+                  required
+                  value={bulkPaymentMethod}
+                  onChange={(e) => setBulkPaymentMethod(e.target.value)}
+                  className="w-full mt-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 rounded-lg text-xs sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:border-indigo-500 appearance-none transition-colors"
+                >
+                  <option value="Cash Handover">Cash Handover</option>
+                  <option value="bKash">bKash</option>
+                  <option value="Nagad">Nagad</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-1.5">This method will be applied to all {eligibleBulkStaff.length} transactions.</p>
+              </div>
+
+              <div className="flex gap-2.5 sm:gap-3 pt-1 sm:pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsBulkModalOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-gray-200 font-bold py-2.5 sm:py-3 rounded-xl transition-colors text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isBulkProcessing} 
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 sm:py-3 rounded-xl transition-colors shadow-lg flex justify-center items-center gap-1.5 sm:gap-2 disabled:opacity-70 text-xs sm:text-sm"
+                >
+                  {isBulkProcessing ? <Loader2 size={14} className="animate-spin sm:w-[16px] sm:h-[16px]" /> : <Receipt size={14} className="sm:w-[16px] sm:h-[16px]" />} 
+                  {isBulkProcessing ? "Processing..." : "Confirm Bulk Pay"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

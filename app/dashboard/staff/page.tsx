@@ -5,7 +5,7 @@ import {
   Search, Users, Briefcase, DollarSign, 
   Wallet, Calendar, CheckCircle2, 
   CreditCard, FileText, Phone, Loader2, Info,
-  Package, Truck, RotateCcw, X, Landmark, Receipt, CalendarDays, Clock, Layers
+  Package, Truck, RotateCcw, X, Landmark, Receipt, CalendarDays, Clock, Layers, User, Copy
 } from "lucide-react";
 
 export default function StaffPayrollPage() {
@@ -44,6 +44,11 @@ export default function StaffPayrollPage() {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkPaymentMethod, setBulkPaymentMethod] = useState("Cash Handover");
 
+  // Clickable Order List Modal
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [modalOrdersTitle, setModalOrdersTitle] = useState("");
+  const [filteredModalOrders, setFilteredModalOrders] = useState<any[]>([]);
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
   const fetchStaffAndOrders = async () => {
@@ -51,7 +56,6 @@ export default function StaffPayrollPage() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
-      // 🚀 FIX: Added limit=5000 to fetch all orders for staff calculation
       const [usersRes, ordersRes, payrollRes] = await Promise.all([
         fetch(`${apiUrl}/users?limit=5000`, { headers }),
         fetch(`${apiUrl}/orders?limit=5000`, { headers }),
@@ -62,7 +66,6 @@ export default function StaffPayrollPage() {
         const usersDataRaw = await usersRes.json();
         const ordersDataRaw = await ordersRes.json();
 
-        // 🚀 FIX: Extract data arrays safely from paginated structure
         setRawUsers(usersDataRaw.data || usersDataRaw);
         setRawOrders(ordersDataRaw.data || ordersDataRaw);
         setPayrollHistory(await payrollRes.json());
@@ -118,8 +121,15 @@ export default function StaffPayrollPage() {
       });
       
       const createdCount = userOrders.length;
+
+      const createdItemsCount = userOrders.reduce((sum: number, o: any) => {
+        return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0);
+      }, 0);
       
-      const deliveredOrders = userOrders.filter((o: any) => ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(o.status?.toUpperCase()));
+      const deliveredOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('DELIVERED') || status === 'PARTIAL';
+      });
       const deliveredParcels = deliveredOrders.length;
       
       const deliveredItemsCount = deliveredOrders.reduce((sum: number, o: any) => {
@@ -130,7 +140,20 @@ export default function StaffPayrollPage() {
         }, 0) || 0);
       }, 0);
       
-      const returnedCount = userOrders.filter((o: any) => ['RETURNED', 'CANCELLED'].includes(o.status?.toUpperCase())).length;
+      const returnedOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('RETURNED') || status.includes('CANCELLED');
+      });
+      const returnedCount = returnedOrders.length;
+
+      const returnedItemsCount = userOrders.reduce((sum: number, o: any) => {
+        const status = (o.status || '').toUpperCase();
+        if (status.includes('RETURNED') || status.includes('CANCELLED')) {
+          return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0);
+        } else {
+          return sum + (o.items?.reduce((s: number, item: any) => s + (Number(item.returnedQty) || 0), 0) || 0);
+        }
+      }, 0);
 
       let calculatedBasicSalary = 0;
       let salaryNote = "";
@@ -168,9 +191,11 @@ export default function StaffPayrollPage() {
         salaryNote,
         commissionRate,
         createdCount,
+        createdItemsCount,
         deliveredParcels,
         deliveredItemsCount,
         returnedCount,
+        returnedItemsCount,
         commissionAmount,
         netPayable,
         pendingPay: user.status === "Active" ? netPayable : 0,
@@ -219,6 +244,68 @@ export default function StaffPayrollPage() {
         document.getElementById('details-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     }
+  };
+
+  const handleOpenOrdersModal = (type: "CREATED" | "DELIVERED" | "RETURNED", targetStaff: any) => {
+    if (!targetStaff) return;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const startOf7DaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    const isMonthFilter = /^\d{4}-\d{2}$/.test(dateFilter);
+
+    let filterStartDate: Date;
+    let filterEndDate: Date;
+
+    if (dateFilter === "Today") {
+      filterStartDate = startOfToday;
+      filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+    } else if (dateFilter === "Yesterday") {
+      filterStartDate = startOfYesterday;
+      filterEndDate = new Date(startOfToday.getTime() - 1);
+    } else if (dateFilter === "Last 7 Days") {
+      filterStartDate = startOf7DaysAgo;
+      filterEndDate = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+    } else if (isMonthFilter) {
+      const [year, month] = dateFilter.split("-").map(Number);
+      filterStartDate = new Date(year, month - 1, 1);
+      filterEndDate = new Date(year, month, 0, 23, 59, 59, 999);
+    } else {
+      filterStartDate = new Date(0);
+      filterEndDate = new Date();
+    }
+
+    const userOrders = rawOrders.filter((o: any) => {
+      if (o.isDeleted) return false;
+      if (o.userId !== targetStaff.id && o.user?.id !== targetStaff.id) return false;
+      const orderDate = new Date(o.createdAt || o.updatedAt);
+      return orderDate >= filterStartDate && orderDate <= filterEndDate;
+    });
+
+    let displayOrders: any[] = [];
+    let title = "";
+
+    if (type === "CREATED") {
+      displayOrders = userOrders;
+      title = `Orders Created by ${targetStaff.name}`;
+    } else if (type === "DELIVERED") {
+      displayOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('DELIVERED') || status === 'PARTIAL';
+      });
+      title = `Orders Delivered for ${targetStaff.name}`;
+    } else if (type === "RETURNED") {
+      displayOrders = userOrders.filter((o: any) => {
+        const status = (o.status || '').toUpperCase();
+        return status.includes('RETURNED') || status.includes('CANCELLED');
+      });
+      title = `Orders Returned/Cancelled for ${targetStaff.name}`;
+    }
+
+    setFilteredModalOrders(displayOrders);
+    setModalOrdersTitle(title);
+    setIsOrdersModalOpen(true);
   };
 
   const handleProcessPayment = async (e: React.FormEvent) => {
@@ -331,7 +418,6 @@ export default function StaffPayrollPage() {
   );
   const bulkTotalAmount = eligibleBulkStaff.reduce((sum, s) => sum + s.netPayable, 0);
 
-  // 🚀 রিইউজেবল স্টাফ ডিটেইলস (ডেস্কটপ এবং মোবাইল উভয়ের জন্য)
   const renderStaffDetails = () => {
     if (!selectedStaff) return null;
     return (
@@ -359,24 +445,32 @@ export default function StaffPayrollPage() {
                 {getDisplayFilterName(dateFilter)}
               </span>
             </div>
-            {/* Mobile Optimized Grid */}
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <div className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-2.5 sm:p-3 border border-gray-100 dark:border-white/5 text-center flex flex-col items-center justify-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 flex items-center gap-1"><Package size={10}/> Created</p>
+              <div 
+                onClick={() => handleOpenOrdersModal("CREATED", selectedStaff)}
+                className="bg-[#f8fafc] dark:bg-white/5 rounded-xl p-2.5 sm:p-3 border border-gray-100 dark:border-white/5 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-gray-300 dark:hover:border-gray-500 transition-all group"
+              >
+                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 flex items-center gap-1 group-hover:text-gray-700 dark:group-hover:text-white transition-colors"><Package size={10}/> Created</p>
                 <p className="text-lg sm:text-xl font-black text-slate-700 dark:text-gray-200">{selectedStaff.createdCount}</p>
-                <p className="text-[8px] sm:text-[9px] text-gray-500">Parcels</p>
+                <p className="text-[8px] sm:text-[9px] text-gray-500 font-medium">({selectedStaff.createdItemsCount} Sarees)</p>
               </div>
               
-              <div className="bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl p-2.5 sm:p-3 border border-emerald-100 dark:border-emerald-500/20 text-center flex flex-col items-center justify-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1 flex items-center gap-1"><Truck size={10}/> Delivered</p>
+              <div 
+                onClick={() => handleOpenOrdersModal("DELIVERED", selectedStaff)}
+                className="bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl p-2.5 sm:p-3 border border-emerald-100 dark:border-emerald-500/20 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-400 transition-all group"
+              >
+                <p className="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1 flex items-center gap-1 group-hover:text-emerald-800 dark:group-hover:text-emerald-300 transition-colors"><Truck size={10}/> Delivered</p>
                 <p className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400">{selectedStaff.deliveredParcels}</p>
                 <p className="text-[8px] sm:text-[9px] text-emerald-600 dark:text-emerald-500 font-medium">({selectedStaff.deliveredItemsCount} Sarees)</p>
               </div>
 
-              <div className="bg-rose-50/50 dark:bg-rose-500/10 rounded-xl p-2.5 sm:p-3 border border-rose-100 dark:border-rose-500/20 text-center flex flex-col items-center justify-center">
-                <p className="text-[9px] sm:text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase mb-1 flex items-center gap-1"><RotateCcw size={10}/> Returned</p>
+              <div 
+                onClick={() => handleOpenOrdersModal("RETURNED", selectedStaff)}
+                className="bg-rose-50/50 dark:bg-rose-500/10 rounded-xl p-2.5 sm:p-3 border border-rose-100 dark:border-rose-500/20 text-center flex flex-col items-center justify-center cursor-pointer hover:shadow-md hover:border-rose-300 dark:hover:border-rose-400 transition-all group"
+              >
+                <p className="text-[9px] sm:text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase mb-1 flex items-center gap-1 group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors"><RotateCcw size={10}/> Returned</p>
                 <p className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-400">{selectedStaff.returnedCount}</p>
-                <p className="text-[8px] sm:text-[9px] text-rose-600 dark:text-rose-500 font-medium">Parcels</p>
+                <p className="text-[8px] sm:text-[9px] text-rose-600 dark:text-rose-500 font-medium">({selectedStaff.returnedItemsCount} Sarees)</p>
               </div>
             </div>
           </div>
@@ -458,7 +552,6 @@ export default function StaffPayrollPage() {
         </div>
         
         <div className="w-full sm:w-auto">
-          {/* Dynamic Bulk Payment Button */}
           <button 
             onClick={() => setIsBulkModalOpen(true)}
             disabled={!isMonthFormat || isCurrentOrFutureMonth || eligibleBulkStaff.length === 0}
@@ -501,7 +594,7 @@ export default function StaffPayrollPage() {
         ))}
       </div>
 
-      {/* ================= MAIN CONTENT GRID (🚀 h-auto for Auto-expanding height) ================= */}
+      {/* ================= MAIN CONTENT GRID ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
         
         {/* ================= LEFT COLUMN ================= */}
@@ -509,8 +602,6 @@ export default function StaffPayrollPage() {
           
           <div className="p-4 sm:p-5 shrink-0 space-y-3 sm:space-y-4 border-b border-gray-100 dark:border-white/5">
             <div className="flex flex-col gap-3">
-              
-              {/* 🚀 Tabs */}
               <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm w-full">
                 <button 
                   onClick={() => setActiveTab("directory")}
@@ -530,7 +621,6 @@ export default function StaffPayrollPage() {
                 </button>
               </div>
 
-              {/* 🚀 Search Box (Now on Top) */}
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
                 <input 
@@ -542,7 +632,6 @@ export default function StaffPayrollPage() {
                 />
               </div>
               
-              {/* 🚀 Date Filter (Now at the Bottom) */}
               {activeTab === "directory" && (
                 <div className="flex bg-slate-50 dark:bg-[#141d1a] p-1.5 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm items-center overflow-x-auto custom-scrollbar w-full">
                   <div className="pl-2 pr-1 text-gray-400 hidden sm:block">
@@ -617,16 +706,21 @@ export default function StaffPayrollPage() {
                         </div>
                       </div>
 
-                      {/* Mobile Optimized Stats Grid */}
                       <div className="grid grid-cols-3 gap-1 sm:gap-2 text-center border-t border-gray-100 dark:border-white/10 pt-2.5 sm:pt-3 text-[9px] sm:text-[11px] font-medium text-gray-500 dark:text-gray-400">
-                        <div className="bg-slate-50 dark:bg-white/5 py-1.5 rounded">
-                          Created <br/><b className="text-slate-700 dark:text-gray-200 text-[11px] sm:text-[13px]">{staff.createdCount}</b>
+                        <div className="bg-slate-50 dark:bg-white/5 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-slate-200 dark:hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("CREATED", staff); }}>
+                          <span className="leading-tight">Created</span> 
+                          <b className="text-slate-700 dark:text-gray-200 text-[11px] sm:text-[13px] leading-tight">{staff.createdCount}</b>
+                          <span className="text-[8px] text-slate-500 dark:text-gray-400 font-bold leading-tight mt-0.5">({staff.createdItemsCount} pcs)</span>
                         </div>
-                        <div className="bg-emerald-50 dark:bg-emerald-500/10 py-1.5 rounded">
-                          Delivered <br/><b className="text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-[13px]">{staff.deliveredParcels}</b>
+                        <div className="bg-emerald-50 dark:bg-emerald-500/10 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("DELIVERED", staff); }}>
+                          <span className="leading-tight">Delivered</span> 
+                          <b className="text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-[13px] leading-tight">{staff.deliveredParcels}</b>
+                          <span className="text-[8px] text-emerald-500 dark:text-emerald-400 font-bold leading-tight mt-0.5">({staff.deliveredItemsCount} pcs)</span>
                         </div>
-                        <div className="bg-rose-50 dark:bg-rose-500/10 py-1.5 rounded">
-                          Returned <br/><b className="text-rose-600 dark:text-rose-400 text-[11px] sm:text-[13px]">{staff.returnedCount}</b>
+                        <div className="bg-rose-50 dark:bg-rose-500/10 py-1.5 px-1 rounded flex flex-col items-center justify-center hover:bg-rose-200 dark:hover:bg-rose-500/20 transition-colors" onClick={(e) => { e.stopPropagation(); handleItemClick(staff); handleOpenOrdersModal("RETURNED", staff); }}>
+                          <span className="leading-tight">Returned</span> 
+                          <b className="text-rose-600 dark:text-rose-400 text-[11px] sm:text-[13px] leading-tight">{staff.returnedCount}</b>
+                          <span className="text-[8px] text-rose-500 dark:text-rose-400 font-bold leading-tight mt-0.5">({staff.returnedItemsCount} pcs)</span>
                         </div>
                       </div>
                     </div>
@@ -669,7 +763,6 @@ export default function StaffPayrollPage() {
         </div>
 
         {/* ================= RIGHT COLUMN (DESKTOP) ================= */}
-        {/* 🚀 lg:sticky added so it follows screen scroll on desktop */}
         <div id="details-section" className="hidden lg:flex lg:col-span-5 bg-white dark:bg-[#1a2421] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm flex-col relative transition-colors h-max lg:sticky lg:top-6">
           {activeTab === "directory" ? (
             selectedStaff ? renderStaffDetails() : (
@@ -691,6 +784,112 @@ export default function StaffPayrollPage() {
           )}
         </div>
       </div>
+
+      {/* ================= 🚀 ORDER LIST MODAL (NEW) ================= */}
+      {isOrdersModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1a2421] w-full max-w-4xl rounded-2xl shadow-2xl border border-transparent dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-slate-50 dark:bg-[#141d1a] shrink-0">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Package size={18} className="text-indigo-500"/> {modalOrdersTitle}
+                </h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">Showing {filteredModalOrders.length} orders</p>
+              </div>
+              <button onClick={() => setIsOrdersModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors p-1">
+                <X size={20} className="sm:w-[24px] sm:h-[24px]"/>
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30 dark:bg-transparent p-4 sm:p-5">
+              {filteredModalOrders.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  {filteredModalOrders.map((order, idx) => {
+                    const status = order.status?.toUpperCase() || 'PENDING';
+                    const isDelivered = ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(status);
+                    const isReturned = ['RETURNED', 'CANCELLED'].includes(status);
+                    
+                    // 🚀 FIXED: Hyper-robust checker for internal Order ID
+                    const rawInternalId = order.orderId || order.order_id || order.invoiceId || order.invoice_id || order.invoiceNo || order.invoice_no || order.orderNumber || order.customId || order.custom_id || (order.id || '').substring(0, 8).toUpperCase();
+                    const finalOrderId = String(rawInternalId).startsWith('#') ? rawInternalId : `#${rawInternalId}`;
+                    
+                    // 🚀 FIXED: Prioritized 'cn' or 'consignmentId' over trackingCode to show the exact numeric CN
+                    const cnNumber = order.cn || order.cn_number || order.consignmentId || order.consignment_id || order.trackingCode || order.tracking_code || null;
+
+                    return (
+                      <div key={idx} className="bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 p-3 sm:p-4 rounded-xl shadow-sm hover:border-indigo-300 transition-colors group">
+                        <div className="flex justify-between items-start mb-2 border-b border-gray-100 dark:border-white/5 pb-2">
+                          <div>
+                            {/* 🚀 EXACT MATCH: Order ID (Like #DE-2074) */}
+                            <div 
+                              onClick={() => {
+                                navigator.clipboard.writeText(finalOrderId);
+                                alert(`Copied: ${finalOrderId}`);
+                              }}
+                              title="Click to Copy ID"
+                              className="text-[13px] sm:text-[14px] font-black text-slate-800 dark:text-white cursor-pointer hover:text-indigo-500 transition-colors flex items-center gap-1.5 w-fit"
+                            >
+                              {finalOrderId}
+                              <Copy size={12} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+                            </div>
+                            
+                            {/* 🚀 EXACT MATCH: CN Number (Like CN: 303979071) */}
+                            {cnNumber && (
+                              <div 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(cnNumber);
+                                  alert(`Copied CN: ${cnNumber}`);
+                                }}
+                                title="Click to Copy CN"
+                                className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-500 cursor-pointer hover:text-blue-700 transition-colors flex items-center gap-1 w-fit mt-0.5"
+                              >
+                                <Package size={11} />
+                                <span>CN: {cnNumber}</span>
+                                <Copy size={10} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+                              </div>
+                            )}
+
+                            <p className="text-[9px] text-gray-400 font-medium mt-1.5">
+                              {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} • {new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                             isDelivered ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20' :
+                             isReturned ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20' :
+                             'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20'
+                          }`}>
+                            {status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 flex items-center gap-1">
+                              <User size={10} className="text-gray-400"/> {order.customer?.name || 'Unknown'}
+                            </p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{order.customer?.phone || 'No phone'}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white">৳ {(order.totalAmount || 0).toLocaleString()}</p>
+                            <p className="text-[9px] font-bold text-gray-500">
+                              {order.items?.reduce((s:number, i:any) => s + (Number(i.quantity) || 0), 0) || 0} Items
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Package size={40} className="opacity-20 mb-3" />
+                  <p className="text-sm font-medium">এই ক্যাটাগরিতে কোনো অর্ডার পাওয়া যায়নি।</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= 🚀 MOBILE DRAWER FOR STAFF DETAILS ================= */}
       {isMobileDrawerOpen && selectedStaff && activeTab === "directory" && (
@@ -814,7 +1013,7 @@ export default function StaffPayrollPage() {
               <h2 className="text-[15px] sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-1.5 sm:gap-2">
                 <Layers size={16} className="text-indigo-500 sm:w-[20px] sm:h-[20px]"/> Process Bulk Payment
               </h2>
-              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-rose-500 transition-colors p-1">
+              <button onClick={() => setIsBulkModalOpen(false)} className="text-gray-400 hover:text-rose-50 transition-colors p-1">
                 <X size={18} className="sm:w-[20px] sm:h-[20px]"/>
               </button>
             </div>

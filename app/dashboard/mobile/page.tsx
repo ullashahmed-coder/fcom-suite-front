@@ -42,10 +42,12 @@ export default function TenantDashboardHome() {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
 
-      const [prodRes, orderRes, usageRes] = await Promise.all([
-        fetch(`${apiUrl}/products?limit=5000`, { headers }),
-        fetch(`${apiUrl}/orders?limit=5000`, { headers }),
-        fetch(`${apiUrl}/billing/usage`, { headers })
+      // 🚀 ১. OOM ক্র্যাশ ঠেকাতে limit=500 করা হয়েছে 
+      // 🚀 ২. হাজার হাজার প্রোডাক্ট না এনে, আমাদের বানানো নতুন API থেকে শুধু সেরা কয়েকটি প্রোডাক্ট আনা হচ্ছে
+      const [orderRes, usageRes, bestSellerRes] = await Promise.all([
+        fetch(`${apiUrl}/orders?limit=500`, { headers }), 
+        fetch(`${apiUrl}/billing/usage`, { headers }),
+        fetch(`${apiUrl}/products/best-sellers?filter=All Time`, { headers }) 
       ]);
 
       if (usageRes.ok) {
@@ -56,11 +58,9 @@ export default function TenantDashboardHome() {
         }
       }
 
-      let allOrdersData: any[] = [];
-
       if (orderRes.ok) {
         const rawOrderData = await orderRes.json();
-        allOrdersData = rawOrderData.data || rawOrderData;
+        const allOrdersData = rawOrderData.data || rawOrderData || [];
         
         const activeOrders = allOrdersData.filter((o: any) => !o.isDeleted);
         setOrders(activeOrders);
@@ -87,38 +87,10 @@ export default function TenantDashboardHome() {
         });
       }
 
-      if (prodRes.ok) {
-        const rawProdData = await prodRes.json();
-        const prods = rawProdData.data || rawProdData;
-        
-        const salesById: Record<string, number> = {};
-        const salesByName: Record<string, number> = {};
-
-        allOrdersData.forEach((order: any) => {
-          if (!order.isDeleted && order.items && Array.isArray(order.items)) {
-            order.items.forEach((item: any) => {
-              const qty = Number(item.quantity) || 1;
-              const pId = item.productId || item.product?.id || item.id;
-              if (pId) {
-                salesById[String(pId)] = (salesById[String(pId)] || 0) + qty;
-              }
-              const pName = (item.product?.name || item.name || "").trim().toLowerCase();
-              if (pName) {
-                salesByName[pName] = (salesByName[pName] || 0) + qty;
-              }
-            });
-          }
-        });
-
-        const sortedBestSellers = prods
-          .filter((p: any) => !p.isDeleted)
-          .map((p: any) => {
-            const sold = salesById[String(p.id)] || salesByName[(p.name || "").trim().toLowerCase()] || p.soldCount || 0;
-            return { ...p, soldCount: sold };
-          })
-          .sort((a: any, b: any) => b.soldCount - a.soldCount);
-
-        setProducts(sortedBestSellers);
+      // 🚀 নতুন API থেকে আসা বেস্ট সেলার ডেটা সরাসরি সেট করা হচ্ছে (কোনো ম্যানুয়াল ক্যালকুলেশন ছাড়াই)
+      if (bestSellerRes.ok) {
+        const bJson = await bestSellerRes.json();
+        setProducts(bJson.data || []);
       }
 
     } catch (err) {
@@ -419,7 +391,6 @@ export default function TenantDashboardHome() {
             <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span> Best Selling Products
             </h3>
-            {/* 🚀 এখানে লিংক ঠিক করে দেয়া হয়েছে */}
             <Link href="/dashboard/best-sellers" className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
               View All &gt;
             </Link>
@@ -428,8 +399,9 @@ export default function TenantDashboardHome() {
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
             {products && products.length > 0 ? (
               products.slice(0, 5).map((item, index) => {
-                const soldCount = item.soldCount || 0;
-                const totalRev = (item.soldCount || 0) * (Number(item.price) || 0);
+                // 🚀 নতুন API-এর রেসপন্স অনুযায়ী ভেরিয়েবল সেট করা হয়েছে
+                const soldCount = item.sold || item.soldCount || 0;
+                const totalRev = item.revenue || (soldCount * (Number(item.price) || 0));
 
                 return (
                   <div 
