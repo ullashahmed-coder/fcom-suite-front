@@ -55,11 +55,14 @@ export default function StaffPayrollPage() {
     try {
       const token = localStorage.getItem("access_token");
       const headers = { "Authorization": `Bearer ${token}` };
+      
+      // 🚀 FIXED: Added page=1 and Timestamp cache buster so it gets the exact same data as OrdersPage
+      const t = Date.now();
 
       const [usersRes, ordersRes, payrollRes] = await Promise.all([
-        fetch(`${apiUrl}/users?limit=5000`, { headers }),
-        fetch(`${apiUrl}/orders?limit=5000`, { headers }),
-        fetch(`${apiUrl}/users/payroll/history`, { headers }) 
+        fetch(`${apiUrl}/users?limit=5000&_t=${t}`, { headers }),
+        fetch(`${apiUrl}/orders?page=1&limit=5000&_t=${t}`, { headers }),
+        fetch(`${apiUrl}/users/payroll/history?_t=${t}`, { headers }) 
       ]);
       
       if (usersRes.ok && ordersRes.ok && payrollRes.ok) {
@@ -810,18 +813,16 @@ export default function StaffPayrollPage() {
                     const isDelivered = ['DELIVERED', 'PARTIAL DELIVERED', 'PARTIAL_DELIVERED', 'PARTIAL'].includes(status);
                     const isReturned = ['RETURNED', 'CANCELLED'].includes(status);
                     
-                    // 🚀 FIXED: Hyper-robust checker for internal Order ID
-                    const rawInternalId = order.orderId || order.order_id || order.invoiceId || order.invoice_id || order.invoiceNo || order.invoice_no || order.orderNumber || order.customId || order.custom_id || (order.id || '').substring(0, 8).toUpperCase();
+                    // 🚀 FIXED: We are now strictly using orderNo directly just like in your main OrdersPage!
+                    const rawInternalId = order.orderNo || (order.id || '').substring(0, 8).toUpperCase();
                     const finalOrderId = String(rawInternalId).startsWith('#') ? rawInternalId : `#${rawInternalId}`;
                     
-                    // 🚀 FIXED: Prioritized 'cn' or 'consignmentId' over trackingCode to show the exact numeric CN
-                    const cnNumber = order.cn || order.cn_number || order.consignmentId || order.consignment_id || order.trackingCode || order.tracking_code || null;
+                    const cnNumber = order.consignmentId || null;
 
                     return (
                       <div key={idx} className="bg-white dark:bg-[#141d1a] border border-gray-200 dark:border-white/10 p-3 sm:p-4 rounded-xl shadow-sm hover:border-indigo-300 transition-colors group">
                         <div className="flex justify-between items-start mb-2 border-b border-gray-100 dark:border-white/5 pb-2">
                           <div>
-                            {/* 🚀 EXACT MATCH: Order ID (Like #DE-2074) */}
                             <div 
                               onClick={() => {
                                 navigator.clipboard.writeText(finalOrderId);
@@ -834,7 +835,6 @@ export default function StaffPayrollPage() {
                               <Copy size={12} className="opacity-0 group-hover:opacity-50 transition-opacity" />
                             </div>
                             
-                            {/* 🚀 EXACT MATCH: CN Number (Like CN: 303979071) */}
                             {cnNumber && (
                               <div 
                                 onClick={() => {
