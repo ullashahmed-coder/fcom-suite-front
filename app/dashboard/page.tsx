@@ -354,7 +354,7 @@ export default function TenantDashboardHome() {
           <div className="space-y-4">
             {districtSales.length > 0 ? (
               districtSales.map((dist: any, index: number) => (
-                <div key={`district-${dist.id || index}`}>
+                <div key={`district-sales-${index}`}>
                   <div className="flex justify-between items-end mb-1">
                     <span className="text-[11px] font-bold text-slate-700 dark:text-gray-300 truncate pr-2">
                       {index + 1}. {dist.name}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Minus, Trash2, ShoppingBag, User, MapPin, Phone, Loader2, Package, ArrowLeft, Receipt, ClipboardEdit, Truck, Zap, Tag, CheckCircle2, AlertCircle, ShieldAlert, ArrowRight } from "lucide-react"
+import { Search, Plus, Minus, Trash2, ShoppingBag, User, MapPin, Phone, Loader2, Package, ArrowLeft, Receipt, ClipboardEdit, Truck, Zap, Tag, CheckCircle2, AlertCircle, ShieldAlert, ArrowRight, Info, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -13,6 +13,7 @@ export default function CreateNewOrderPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [cart, setCart] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isParsingText, setIsParsingText] = useState(false) // 🚀 AI parsing loader state
   const [customDeliveryCharge, setCustomDeliveryCharge] = useState<number | string>("")
   const [discount, setDiscount] = useState<number | string>("")
 
@@ -163,6 +164,72 @@ export default function CreateNewOrderPage() {
     }
 
     setCustomer({ ...customer, phone: input });
+  };
+
+  // 🚀 BULLETPROOF SMART PASTE FUNCTION
+  const handleSmartPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    e.preventDefault();
+    setIsParsingText(true);
+
+    try {
+      // 1. কনভার্ট বাংলা নাম্বার টু ইংরেজি
+      const banglaToEnglishDigits = (str: string) => {
+        const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+        return str.replace(/[০-৯]/g, (match) => banglaDigits.indexOf(match).toString());
+      };
+      
+      let rawText = banglaToEnglishDigits(pastedText);
+
+      // 2. ফালতু/বাড়তি কথাবার্তা রিমুভ করা (Conversational Fillers)
+      const fillers = /^(?:ok|oky|okay|ওকে|জি|জ্বি|ভাই|ভাইয়া|হ্যালো|দিয়ে দিন|পাঠান|অর্ডার|কনফার্ম|করুন|প্লিজ|এই যে)\s*[:\,\-\s]+/ig;
+      rawText = rawText.replace(fillers, "");
+
+      // 3. ফোন নাম্বার খোঁজা এবং মুছে ফেলা
+      const phoneMatch = rawText.match(/(?:(?:\+|00)88)?(01[3-9]\d{8})/);
+      const phone = phoneMatch ? phoneMatch[1] : "";
+          if (phoneMatch && phoneMatch[0]) {
+
+      rawText = rawText.replace(phoneMatch[0], "");
+
+    }
+
+      // 4. নাম খোঁজা (শুধুমাত্র যদি নামের ট্যাগ থাকে, তবেই সে নাম নিবে)
+      let name = "";
+      const nameMatch = rawText.match(/(?:Name|নাম|নামঃ|Customer Name|কাস্টমার)\s*[:\-=\s]\s*(.*?)(?=\s*(?:Phone|Mobile|Contact|মোবাইল|ফোন|নাম্বার|Number|District|জেলা|Address|ঠিকানা|Delivery Address|লোকেশন|পুরো ঠিকানা|Full Address)|$|,|\n)/i);
+      
+      if (nameMatch) {
+          name = nameMatch[1].trim();
+          rawText = rawText.replace(nameMatch[0], "");
+      }
+
+      // 5. সব ধরনের ট্যাগ এগ্রেসিভভাবে রিমুভ করা ("ঠিকানা হচ্ছে", "আমার ঠিকানা" যুক্ত করা হয়েছে)
+      const tagsToRemove = /(?:Phone|Mobile|Contact|মোবাইল|ফোন|নাম্বার|Number|District|জেলা|Address|ঠিকানা|ঠিকানাঃ|ঠিকানা হচ্ছে|আমার ঠিকানা|Delivery Address|লোকেশন|পুরো ঠিকানা|Full Address|ঠিকানাটা)\s*[:\-=\s]\s*/ig;
+      rawText = rawText.replace(tagsToRemove, ", ");
+
+      // 6. টেক্সটকে কমা বা লাইন ব্রেক দিয়ে ভাগ করে পরিষ্কার করা
+      let remainingParts = rawText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+
+      // 7. ফাইনাল অ্যাড্রেস বানানো (ডাবল কমা রিমুভ করে)
+      let finalAddress = remainingParts.join(", ").replace(/, ,/g, ",").replace(/^, /, "").trim();
+
+      // স্পেশাল ক্যারেক্টার এবং ঠিকানার শুরুর "ওকে" বা "জি" ক্লিনিং
+      finalAddress = finalAddress.replace(/^[\:\-\=,]\s*/, "");
+      finalAddress = finalAddress.replace(/^(?:ok|oky|okay|ওকে|জি|জ্বি)\s*/i, "").trim();
+      finalAddress = finalAddress.replace(/^[,\s]+|[,\s]+$/g, ""); // ঠিকানার শুরুতে বা শেষে কমা থাকলে মুছবে
+
+      setCustomer(prev => ({
+        ...prev,
+        phone: phone || prev.phone,
+        name: name || prev.name, // শুধু ট্যাগ থাকলেই নাম বসবে, নাহলে ফাঁকা থাকবে
+        address: finalAddress || pastedText
+      }));
+
+    } finally {
+      setIsParsingText(false);
+    }
   };
 
   const isPhoneValid = customer.phone.length === 11 && customer.phone.startsWith("01");
@@ -341,7 +408,6 @@ export default function CreateNewOrderPage() {
                 <p className="text-sm font-medium">কোনো শাড়ি পাওয়া যায়নি!</p>
               </div>
             ) : (
-              // 🚀 UPDATED COMPACT CARDS (FIXED HEIGHT ISSUE)
               <div className="max-h-[450px] overflow-y-auto custom-scrollbar pr-1">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
                   {filteredProducts.map((product) => {
@@ -351,7 +417,6 @@ export default function CreateNewOrderPage() {
                     return (
                       <div key={product.id} className="border border-slate-200 dark:border-white/10 rounded-xl p-2.5 hover:border-[#7A1B38]/50 hover:shadow-sm transition-all group bg-slate-50 dark:bg-[#202b27] flex flex-col">
                         
-                        {/* 🚀 ছবির বক্স: p-1 যোগ করা হয়েছে এবং object-cover এর বদলে object-contain দেওয়া হয়েছে */}
                         <div className="w-full h-38 bg-white dark:bg-[#1a2421] rounded-lg overflow-hidden flex items-center justify-center mb-2.5 relative shrink-0">
                           {getProductImage(product) ? (
                             <img 
@@ -417,7 +482,6 @@ export default function CreateNewOrderPage() {
                     </div>
 
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-200 dark:border-transparent sm:border-t-0">
-                      {/* 🚀 +/- BUTTONS FOR QUANTITY */}
                       <div className="flex items-center gap-1 bg-white dark:bg-[#141d1a] border border-slate-300 dark:border-white/10 rounded-lg p-0.5">
                         <button
                           type="button"
@@ -535,16 +599,26 @@ export default function CreateNewOrderPage() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 dark:text-gray-300">Delivery Address *</label>
+              <div className="space-y-1.5 relative">
+                <label className="text-xs font-bold text-slate-600 dark:text-gray-300 flex justify-between items-center">
+                  Delivery Address *
+                  {isParsingText && <span className="text-[10px] text-blue-600 flex items-center gap-1 animate-pulse"><Sparkles size={10}/> Auto Filling...</span>}
+                </label>
                 <textarea
                   required
                   rows={2}
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                  className="w-full p-3 bg-slate-50 dark:bg-[#202b27] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border border-slate-300 dark:border-white/10 rounded-lg text-sm focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38] outline-none resize-none transition-colors"
-                  placeholder="Full address for delivery..."
+                  onPaste={handleSmartPaste}
+                  disabled={isParsingText}
+                  className={`w-full p-3 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 border rounded-lg text-sm focus:outline-none resize-none transition-colors ${
+                    isParsingText 
+                    ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-300 cursor-wait' 
+                    : 'bg-slate-50 dark:bg-[#202b27] border-slate-300 dark:border-white/10 focus:border-[#7A1B38] focus:ring-1 focus:ring-[#7A1B38]'
+                  }`}
+                  placeholder="Paste customer message here to auto-fill..."
                 ></textarea>
+                <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1"><Info size={10}/> Tip: You can paste unformatted text containing name, phone, and address.</p>
               </div>
 
               <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-white/5 transition-colors">
